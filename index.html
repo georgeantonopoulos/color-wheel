@@ -115,6 +115,8 @@
             const centerY = size / 2;
 
             ctx.clearRect(0, 0, size, size);
+            
+            // Draw the color wheel with anti-aliasing
             for (let y = 0; y < size; y++) {
                 for (let x = 0; x < size; x++) {
                     const dx = x - centerX;
@@ -125,7 +127,10 @@
                         const hue = (Math.atan2(dy, dx) + Math.PI) / (2 * Math.PI);
                         const saturation = distance / radius;
                         const [r, g, b] = hsvToRgb(hue, saturation, 1);
-                        ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
+                        
+                        // Apply anti-aliasing to the edge
+                        const alpha = distance > radius - 1 ? 1 - (distance - (radius - 1)) : 1;
+                        ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${alpha})`;
                         ctx.fillRect(x, y, 1, 1);
                     }
                 }
@@ -137,43 +142,30 @@
         }
 
         function drawIndicator(x, y) {
-            const radius = 12; // 1.5 times larger than before
-
-            // Draw shadow
-            ctx.beginPath();
-            ctx.arc(x + 2, y + 2, radius, 0, 2 * Math.PI);
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
-            ctx.fill();
-
-            // Redraw the color wheel section under the indicator
-            const size = canvas.width;
-            const centerX = size / 2;
-            const centerY = size / 2;
-            const dx = x - centerX;
-            const dy = y - centerY;
-            const distance = Math.sqrt(dx * dx + dy * dy);
-            const hue = (Math.atan2(dy, dx) + Math.PI) / (2 * Math.PI);
-            const saturation = distance / (size / 2);
-            const [r, g, b] = hsvToRgb(hue, saturation, 1);
+            const radius = 8;
             
-            ctx.beginPath();
-            ctx.arc(x, y, radius, 0, 2 * Math.PI);
-            ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
-            ctx.fill();
+            function drawAntiAliasedCircle(centerX, centerY, radius, strokeStyle, lineWidth) {
+                const diameter = radius * 2;
+                const radiusSquared = radius * radius;
+                
+                for (let y = -radius - 2; y <= radius + 2; y++) {
+                    for (let x = -radius - 2; x <= radius + 2; x++) {
+                        const distanceSquared = x * x + y * y;
+                        if (distanceSquared > (radius - lineWidth) * (radius - lineWidth) && distanceSquared < (radius + lineWidth) * (radius + lineWidth)) {
+                            const distance = Math.sqrt(distanceSquared);
+                            const alpha = Math.max(0, Math.min(1, lineWidth + 0.5 - Math.abs(distance - radius)));
+                            ctx.fillStyle = `rgba(${strokeStyle}, ${alpha})`;
+                            ctx.fillRect(centerX + x, centerY + y, 1, 1);
+                        }
+                    }
+                }
+            }
 
-            // Draw indicator outline
-            ctx.beginPath();
-            ctx.arc(x, y, radius, 0, 2 * Math.PI);
-            ctx.strokeStyle = '#333333'; // Dark grey
-            ctx.lineWidth = 3;
-            ctx.stroke();
+            // Draw grey outline
+            drawAntiAliasedCircle(x, y, radius + 1, '128, 128, 128', 1);
 
-            // Draw white inner ring
-            ctx.beginPath();
-            ctx.arc(x, y, radius - 2, 0, 2 * Math.PI);
-            ctx.strokeStyle = 'white';
-            ctx.lineWidth = 2;
-            ctx.stroke();
+            // Draw white outline
+            drawAntiAliasedCircle(x, y, radius, '255, 255, 255', 1);
         }
 
         function hsvToRgb(h, s, v) {
@@ -219,17 +211,46 @@
             }
         }
 
-        canvas.addEventListener('mousedown', (e) => {
-            const rect = canvas.getBoundingClientRect();
-            updateColor(e.clientX - rect.left, e.clientY - rect.top);
-        });
+        // Mouse event listeners
+        canvas.addEventListener('mousedown', handleStart);
+        canvas.addEventListener('mousemove', handleMove);
+        canvas.addEventListener('mouseup', handleEnd);
+        canvas.addEventListener('mouseout', handleEnd);
 
-        canvas.addEventListener('mousemove', (e) => {
-            if (e.buttons > 0) {
-                const rect = canvas.getBoundingClientRect();
-                updateColor(e.clientX - rect.left, e.clientY - rect.top);
+        // Touch event listeners
+        canvas.addEventListener('touchstart', handleStart);
+        canvas.addEventListener('touchmove', handleMove);
+        canvas.addEventListener('touchend', handleEnd);
+        canvas.addEventListener('touchcancel', handleEnd);
+
+        function handleStart(e) {
+            e.preventDefault();
+            const pos = getEventPosition(e);
+            updateColor(pos.x, pos.y);
+        }
+
+        function handleMove(e) {
+            e.preventDefault();
+            if (e.buttons > 0 || e.type === 'touchmove') {
+                const pos = getEventPosition(e);
+                updateColor(pos.x, pos.y);
             }
-        });
+        }
+
+        function handleEnd(e) {
+            // Optional: Add any cleanup or final actions here
+        }
+
+        function getEventPosition(e) {
+            const rect = canvas.getBoundingClientRect();
+            const clientX = e.clientX || (e.touches && e.touches[0].clientX);
+            const clientY = e.clientY || (e.touches && e.touches[0].clientY);
+            return {
+                x: clientX - rect.left,
+                y: clientY - rect.top
+            };
+        }
+
         copyButton.addEventListener('click', () => {
             const rgbText = rgbLabel.textContent;
             const rgbValues = rgbText.match(/\d+\.\d+/g);
