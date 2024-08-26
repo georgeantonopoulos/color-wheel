@@ -176,14 +176,19 @@
                 updateColor(e.clientX - rect.left, e.clientY - rect.top);
             }
         });
-
         copyButton.addEventListener('click', () => {
             const rgbText = rgbLabel.textContent;
-            navigator.clipboard.writeText(rgbText).then(() => {
-                alert('Color values copied to clipboard!');
-            }).catch(err => {
-                console.error('Failed to copy: ', err);
-            });
+            const rgbValues = rgbText.match(/\d+\.\d+/g);
+            if (rgbValues && rgbValues.length === 3) {
+                const formattedValues = rgbValues.map(v => parseFloat(v).toFixed(3)).join(' ') + ' 1';
+                navigator.clipboard.writeText(formattedValues).then(() => {
+                    alert('Color values copied to clipboard!');
+                }).catch(err => {
+                    console.error('Failed to copy: ', err);
+                });
+            } else {
+                console.error('Failed to extract RGB values');
+            }
         });
 
         window.addEventListener('resize', resizeCanvas);
