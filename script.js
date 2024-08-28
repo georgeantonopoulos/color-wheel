@@ -89,7 +89,37 @@ function hsvToRgb(h, s, v) {
         case 5: r = v, g = p, b = q; break;
     }
 
-    return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
+    // Convert to ACES AP1 primaries
+    return [
+        Math.round(sRGBToACES(r) * 255),
+        Math.round(sRGBToACES(g) * 255),
+        Math.round(sRGBToACES(b) * 255)
+    ];
+}
+
+// Add these new functions for ACES conversion
+function sRGBToACES(c) {
+    // First, convert sRGB to linear sRGB
+    if (c <= 0.04045) {
+        c = c / 12.92;
+    } else {
+        c = Math.pow((c + 0.055) / 1.055, 2.4);
+    }
+    
+    // Then, convert linear sRGB to ACES AP1
+    return 0.6131 * c + 0.3396 * c - 0.0527 * c;
+}
+
+function ACESToSRGB(c) {
+    // First, convert ACES AP1 to linear sRGB
+    c = 1.7050 * c - 0.6242 * c - 0.0808 * c;
+    
+    // Then, convert linear sRGB to sRGB
+    if (c <= 0.0031308) {
+        return c * 12.92;
+    } else {
+        return 1.055 * Math.pow(c, 1/2.4) - 0.055;
+    }
 }
 
 function rgbToHex(r, g, b) {
@@ -112,11 +142,13 @@ function updateColor(x, y) {
         const saturation = distance / radius;
         const [r, g, b] = hsvToRgb(hue, saturation, 1);
         
-        const hex = rgbToHex(r, g, b);
+        const acesR = r / 255;
+        const acesG = g / 255;
+        const acesB = b / 255;
         
-        colorDisplay.style.backgroundColor = `rgb(${r}, ${g}, ${b})`;
-        updateLabel(rgbLabel, `RGB (0-1): (${(r/255).toFixed(3)}, ${(g/255).toFixed(3)}, ${(b/255).toFixed(3)})`);
-        updateLabel(document.getElementById('hexLabel'), `HEX: ${hex}`);
+        colorDisplay.style.backgroundColor = `rgb(${Math.round(ACESToSRGB(acesR) * 255)}, ${Math.round(ACESToSRGB(acesG) * 255)}, ${Math.round(ACESToSRGB(acesB) * 255)})`;
+        updateLabel(rgbLabel, `ACES RGB (0-1): (${acesR.toFixed(3)}, ${acesG.toFixed(3)}, ${acesB.toFixed(3)})`);
+        updateLabel(document.getElementById('hexLabel'), `HEX: ${rgbToHex(r, g, b)}`);
         updateLabel(document.getElementById('hsvLabel'), `HSV: (${Math.round(hue * 360)}°, ${Math.round(saturation * 100)}%, 100%)`);
         
         drawColorWheel();
@@ -173,7 +205,8 @@ copyButton.addEventListener('click', () => {
     const rgbValues = rgbText.match(/\d+\.\d+/g);
     
     if (rgbValues && rgbValues.length === 3) {
-        const formattedValues = `${rgbValues.map(v => parseFloat(v).toFixed(3)).join(' ')} 1`;
+        // The values are already in ACES space, just format them
+        const formattedValues = `${rgbValues.join(' ')} 1`;
         
         navigator.clipboard.writeText(formattedValues).then(() => {
             alert('Color values copied to clipboard!');
