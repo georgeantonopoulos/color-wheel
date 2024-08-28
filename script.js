@@ -164,19 +164,13 @@ canvas.addEventListener('touchmove', handleMove);
 canvas.addEventListener('touchend', handleEnd);
 canvas.addEventListener('touchcancel', handleEnd);
 
+copyButton.textContent = 'Copy for Nuke';
 copyButton.addEventListener('click', () => {
     const rgbText = rgbLabel ? rgbLabel.textContent : '';
-    const hexText = document.getElementById('hexLabel') ? document.getElementById('hexLabel').textContent : '';
-    const hsvText = document.getElementById('hsvLabel') ? document.getElementById('hsvLabel').textContent : '';
-    
     const rgbValues = rgbText.match(/\d+\.\d+/g);
-    const hexValue = hexText.split(': ')[1];
-    const hsvValues = hsvText.match(/\d+/g);
     
-    if (rgbValues && rgbValues.length === 3 && hexValue && hsvValues && hsvValues.length === 3) {
-        const formattedValues = `RGB: ${rgbValues.map(v => parseFloat(v).toFixed(3)).join(' ')} 1
-HEX: ${hexValue}
-HSV: ${hsvValues[0]}° ${hsvValues[1]}% 100%`;
+    if (rgbValues && rgbValues.length === 3) {
+        const formattedValues = `${rgbValues.map(v => parseFloat(v).toFixed(3)).join(' ')} 1`;
         
         navigator.clipboard.writeText(formattedValues).then(() => {
             alert('Color values copied to clipboard!');
