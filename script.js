@@ -112,11 +112,17 @@ function updateColor(x, y) {
         const hex = rgbToHex(r, g, b);
         
         colorDisplay.style.backgroundColor = `rgb(${r}, ${g}, ${b})`;
-        rgbLabel.textContent = `RGB (0-1): (${(r/255).toFixed(3)}, ${(g/255).toFixed(3)}, ${(b/255).toFixed(3)})`;
-        document.getElementById('hexLabel').textContent = `HEX: ${hex}`;
-        document.getElementById('hsvLabel').textContent = `HSV: (${(hue * 360).toFixed(0)}°, ${(saturation * 100).toFixed(0)}%, 100%)`;
+        updateLabel(rgbLabel, `RGB (0-1): (${(r/255).toFixed(3)}, ${(g/255).toFixed(3)}, ${(b/255).toFixed(3)})`);
+        updateLabel(document.getElementById('hexLabel'), `HEX: ${hex}`);
+        updateLabel(document.getElementById('hsvLabel'), `HSV: (${Math.round(hue * 360)}°, ${Math.round(saturation * 100)}%, 100%)`);
         
         drawColorWheel();
+    }
+}
+
+function updateLabel(element, text) {
+    if (element) {
+        element.textContent = text;
     }
 }
 
@@ -159,9 +165,13 @@ canvas.addEventListener('touchend', handleEnd);
 canvas.addEventListener('touchcancel', handleEnd);
 
 copyButton.addEventListener('click', () => {
-    const rgbValues = rgbLabel.textContent.match(/\d+\.\d+/g);
-    const hexValue = document.getElementById('hexLabel').textContent.split(': ')[1];
-    const hsvValues = document.getElementById('hsvLabel').textContent.match(/\d+/g);
+    const rgbText = rgbLabel ? rgbLabel.textContent : '';
+    const hexText = document.getElementById('hexLabel') ? document.getElementById('hexLabel').textContent : '';
+    const hsvText = document.getElementById('hsvLabel') ? document.getElementById('hsvLabel').textContent : '';
+    
+    const rgbValues = rgbText.match(/\d+\.\d+/g);
+    const hexValue = hexText.split(': ')[1];
+    const hsvValues = hsvText.match(/\d+/g);
     
     if (rgbValues && rgbValues.length === 3 && hexValue && hsvValues && hsvValues.length === 3) {
         const formattedValues = `RGB: ${rgbValues.map(v => parseFloat(v).toFixed(3)).join(' ')} 1
@@ -172,9 +182,11 @@ HSV: ${hsvValues[0]}° ${hsvValues[1]}% 100%`;
             alert('Color values copied to clipboard!');
         }).catch(err => {
             console.error('Failed to copy: ', err);
+            alert('Failed to copy to clipboard. Please copy the values manually.');
         });
     } else {
         console.error('Failed to extract color values');
+        alert('Failed to extract color values. Please try again.');
     }
 });
 
