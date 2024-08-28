@@ -35,19 +35,26 @@ h1 {
     height: auto;
 }
 
+#colorInfo {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-top: 20px;
+}
+
 #colorDisplay {
     width: 100px;
     height: 50px;
-    margin: 20px auto;
+    margin-bottom: 10px;
     border-radius: 5px;
     box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
 }
 
-#rgbLabel {
-    font-size: 1em;
+#rgbLabel, #hexLabel, #hsvLabel {
+    font-size: 0.9em;
     text-align: center;
     color: #b0b0b0;
-    margin-top: 10px;
+    margin-top: 5px;
 }
 
 #copyButton {
@@ -78,5 +85,11 @@ h1 {
     #colorWheel {
         width: 100%;
         height: auto;
+    }
+    #colorInfo {
+        margin-top: 10px;
+    }
+    #rgbLabel, #hexLabel, #hsvLabel {
+        font-size: 0.8em;
     }
 }

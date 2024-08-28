@@ -5,13 +5,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Color Wheel</title>
     <link rel="stylesheet" href="styles.css">
+    <meta name="description" content="Interactive Color Wheel Tool">
+    <link rel="icon" href="favicon.ico" type="image/x-icon">
 </head>
 <body>
     <div class="container">
         <h1>Color Wheel</h1>
         <canvas id="colorWheel" width="300" height="300"></canvas>
-        <div id="colorDisplay"></div>
-        <div id="rgbLabel">RGB (0-1): </div>
+        <div id="colorInfo">
+            <div id="colorDisplay"></div>
+            <div id="rgbLabel">RGB (0-1): </div>
+            <div id="hexLabel">HEX: </div>
+            <div id="hsvLabel">HSV: </div>
+        </div>
         <button id="copyButton">Copy Color Values</button>
     </div>
 
