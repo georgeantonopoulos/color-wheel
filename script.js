@@ -245,6 +245,11 @@ function updateSavedColorsDisplay() {
         colorElement.addEventListener('click', () => revertToColor(color));
         savedColorsContainer.appendChild(colorElement);
     });
+
+    // Calculate and set the height of the savedColors container
+    const rows = Math.ceil(savedColors.length / 4); // Assuming 4 colors per row
+    const height = Math.max(60, rows * 50); // 50px per row, minimum 60px
+    savedColorsContainer.style.height = `${height}px`;
 }
 
 function revertToColor(color) {
