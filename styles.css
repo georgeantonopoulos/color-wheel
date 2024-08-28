@@ -57,7 +57,7 @@ h1 {
     margin-top: 5px;
 }
 
-#copyButton {
+#copyButton, #saveButton {
     display: block;
     margin: 20px auto 0;
     padding: 10px 20px;
@@ -70,8 +70,24 @@ h1 {
     transition: background-color 0.3s;
 }
 
-#copyButton:hover {
+#copyButton:hover, #saveButton:hover {
     background-color: #45a049;
+}
+
+#savedColors {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-top: 20px;
+}
+
+.saved-color {
+    width: 40px;
+    height: 40px;
+    margin: 5px;
+    border-radius: 5px;
+    cursor: pointer;
+    box-shadow: 0 0 5px rgba(0, 0, 0, 0.3);
 }
 
 @media (max-width: 600px) {
@@ -91,5 +107,13 @@ h1 {
     }
     #rgbLabel, #hexLabel, #hsvLabel {
         font-size: 0.8em;
+    }
+    #savedColors {
+        margin-top: 10px;
+    }
+    .saved-color {
+        width: 30px;
+        height: 30px;
+        margin: 3px;
     }
 }

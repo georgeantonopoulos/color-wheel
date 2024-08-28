@@ -3,6 +3,9 @@ const ctx = canvas.getContext('2d');
 const colorDisplay = document.getElementById('colorDisplay');
 const rgbLabel = document.getElementById('rgbLabel');
 const copyButton = document.getElementById('copyButton');
+const saveButton = document.getElementById('saveButton');
+const savedColorsContainer = document.getElementById('savedColors');
+let savedColors = [];
 
 let currentX, currentY;
 
@@ -183,6 +186,84 @@ copyButton.addEventListener('click', () => {
         alert('Failed to extract color values. Please try again.');
     }
 });
+
+saveButton.addEventListener('click', saveColor);
+
+function saveColor() {
+    const currentColor = {
+        rgb: colorDisplay.style.backgroundColor,
+        hex: document.getElementById('hexLabel').textContent.split(': ')[1],
+        hsv: document.getElementById('hsvLabel').textContent.split(': ')[1],
+        x: currentX,
+        y: currentY
+    };
+    if (!savedColors.some(color => color.rgb === currentColor.rgb)) {
+        savedColors.push(currentColor);
+        updateSavedColorsDisplay();
+    }
+}
+
+function updateSavedColorsDisplay() {
+    savedColorsContainer.innerHTML = '';
+    savedColors.forEach((color, index) => {
+        const colorElement = document.createElement('div');
+        colorElement.className = 'saved-color';
+        colorElement.style.backgroundColor = color.rgb;
+        colorElement.addEventListener('click', () => revertToColor(color));
+        savedColorsContainer.appendChild(colorElement);
+    });
+}
+
+function revertToColor(color) {
+    // Update color display
+    colorDisplay.style.backgroundColor = color.rgb;
+    
+    // Update labels
+    updateLabel(rgbLabel, `RGB (0-1): ${color.rgb.match(/\d+/g).map(v => (parseInt(v) / 255).toFixed(3)).join(', ')}`);
+    updateLabel(document.getElementById('hexLabel'), `HEX: ${color.hex}`);
+    updateLabel(document.getElementById('hsvLabel'), `HSV: ${color.hsv}`);
+    
+    // Update color wheel position
+    currentX = color.x;
+    currentY = color.y;
+    
+    // Redraw the color wheel with the updated position
+    drawColorWheel();
+}
+
+function rgbToHsv(r, g, b) {
+    r /= 255;
+    g /= 255;
+    b /= 255;
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    let h, s, v = max;
+
+    const d = max - min;
+    s = max === 0 ? 0 : d / max;
+
+    if (max === min) {
+        h = 0;
+    } else {
+        switch (max) {
+            case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+            case g: h = (b - r) / d + 2; break;
+            case b: h = (r - g) / d + 4; break;
+        }
+        h /= 6;
+    }
+
+    return [h, s, v];
+}
+
+function getColorWheelPosition(r, g, b) {
+    const [h, s, v] = rgbToHsv(r, g, b);
+    const radius = canvas.width / 2;
+    const angle = h * 2 * Math.PI;
+    const x = radius + s * radius * Math.cos(angle);
+    const y = radius + s * radius * Math.sin(angle);
+    return [x, y];
+}
 
 window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
