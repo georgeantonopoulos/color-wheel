@@ -1,0 +1,21 @@
+{
+  "name": "Color Wheel Tool",
+  "short_name": "Color Wheel",
+  "description": "Interactive Color Wheel Tool",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#2c2c2c",
+  "theme_color": "#3a3a3a",
+  "icons": [
+    {
+      "src": "icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
