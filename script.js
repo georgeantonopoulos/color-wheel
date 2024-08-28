@@ -238,6 +238,16 @@ function saveColor() {
 
 function updateSavedColorsDisplay() {
     savedColorsContainer.innerHTML = '';
+    
+    // Add clear button if there are saved colors
+    if (savedColors.length > 0) {
+        const clearButton = document.createElement('button');
+        clearButton.id = 'clearSavedColors';
+        clearButton.innerHTML = '&times;';
+        clearButton.addEventListener('click', clearSavedColors);
+        savedColorsContainer.appendChild(clearButton);
+    }
+    
     savedColors.forEach((color, index) => {
         const colorElement = document.createElement('div');
         colorElement.className = 'saved-color';
@@ -250,6 +260,11 @@ function updateSavedColorsDisplay() {
     const rows = Math.ceil(savedColors.length / 4); // Assuming 4 colors per row
     const height = Math.max(60, rows * 50); // 50px per row, minimum 60px
     savedColorsContainer.style.height = `${height}px`;
+}
+
+function clearSavedColors() {
+    savedColors = [];
+    updateSavedColorsDisplay();
 }
 
 function revertToColor(color) {
