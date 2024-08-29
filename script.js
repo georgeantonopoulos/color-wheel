@@ -148,7 +148,7 @@ function updateColor(x, y) {
         
         colorDisplay.style.backgroundColor = `rgb(${Math.round(ACESToSRGB(acesR) * 255)}, ${Math.round(ACESToSRGB(acesG) * 255)}, ${Math.round(ACESToSRGB(acesB) * 255)})`;
         updateLabel(rgbLabel, `ACES RGB (0-1): (${acesR.toFixed(3)}, ${acesG.toFixed(3)}, ${acesB.toFixed(3)})`);
-        updateLabel(document.getElementById('hexLabel'), `HEX: ${rgbToHex(r, g, b)}`);
+        updateLabel(document.getElementById('hexLabel'), `HEX: <input type="text" id="hexInput" value="${rgbToHex(r, g, b)}" />`);
         updateLabel(document.getElementById('hsvLabel'), `HSV: (${Math.round(hue * 360)}°, ${Math.round(saturation * 100)}%, 100%)`);
         
         drawColorWheel();
@@ -157,7 +157,16 @@ function updateColor(x, y) {
 
 function updateLabel(element, text) {
     if (element) {
-        element.textContent = text;
+        element.innerHTML = text;
+        if (element.id === 'hexLabel') {
+            const hexInput = document.getElementById('hexInput');
+            hexInput.addEventListener('change', (e) => {
+                updateFromHex(e.target.value);
+            });
+            hexInput.addEventListener('blur', (e) => {
+                updateFromHex(e.target.value);
+            });
+        }
     }
 }
 
@@ -225,7 +234,7 @@ saveButton.addEventListener('click', saveColor);
 function saveColor() {
     const currentColor = {
         rgb: colorDisplay.style.backgroundColor,
-        hex: document.getElementById('hexLabel').textContent.split(': ')[1],
+        hex: document.getElementById('hexInput').value,
         hsv: document.getElementById('hsvLabel').textContent.split(': ')[1],
         x: currentX,
         y: currentY
@@ -273,7 +282,7 @@ function revertToColor(color) {
     
     // Update labels
     updateLabel(rgbLabel, `RGB (0-1): ${color.rgb.match(/\d+/g).map(v => (parseInt(v) / 255).toFixed(3)).join(', ')}`);
-    updateLabel(document.getElementById('hexLabel'), `HEX: ${color.hex}`);
+    updateLabel(document.getElementById('hexLabel'), `HEX: <input type="text" id="hexInput" value="${color.hex}" />`);
     updateLabel(document.getElementById('hsvLabel'), `HSV: ${color.hsv}`);
     
     // Update color wheel position
@@ -316,6 +325,43 @@ function getColorWheelPosition(r, g, b) {
     const x = radius + s * radius * Math.cos(angle);
     const y = radius + s * radius * Math.sin(angle);
     return [x, y];
+}
+
+// Add this new function
+function hexToRgb(hex) {
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return result ? {
+        r: parseInt(result[1], 16),
+        g: parseInt(result[2], 16),
+        b: parseInt(result[3], 16)
+    } : null;
+}
+
+// Modify the updateFromHex function
+function updateFromHex(hex) {
+    const rgb = hexToRgb(hex);
+    if (rgb) {
+        const [h, s, v] = rgbToHsv(rgb.r, rgb.g, rgb.b);
+        const [x, y] = getColorWheelPosition(rgb.r, rgb.g, rgb.b);
+        
+        // Update color display
+        colorDisplay.style.backgroundColor = `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})`;
+        
+        // Update labels
+        const acesR = rgb.r / 255;
+        const acesG = rgb.g / 255;
+        const acesB = rgb.b / 255;
+        updateLabel(rgbLabel, `ACES RGB (0-1): (${acesR.toFixed(3)}, ${acesG.toFixed(3)}, ${acesB.toFixed(3)})`);
+        updateLabel(document.getElementById('hexLabel'), `HEX: <input type="text" id="hexInput" value="${hex}" />`);
+        updateLabel(document.getElementById('hsvLabel'), `HSV: (${Math.round(h * 360)}°, ${Math.round(s * 100)}%, ${Math.round(v * 100)}%)`);
+        
+        // Update color wheel position
+        currentX = x;
+        currentY = y;
+        
+        // Redraw the color wheel with the updated position
+        drawColorWheel();
+    }
 }
 
 window.addEventListener('resize', resizeCanvas);

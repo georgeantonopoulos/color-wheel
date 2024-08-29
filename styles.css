@@ -168,3 +168,18 @@ h1 {
         font-size: 12px;
     }
 }
+
+#hexInput {
+    background-color: transparent;
+    border: none;
+    color: #b0b0b0;
+    font-family: inherit;
+    font-size: inherit;
+    width: 70px;
+    text-align: center;
+}
+
+#hexInput:focus {
+    outline: none;
+    border-bottom: 1px solid #b0b0b0;
+}
