@@ -9,40 +9,59 @@ let savedColors = [];
 
 let currentX, currentY;
 
+// Add these variables at the top with other constants
+let wheelBackground = null;
+let isDragging = false;
+
 function resizeCanvas() {
     const container = document.querySelector('.container');
     const size = Math.min(container.offsetWidth - 40, 300);
     canvas.width = size;
     canvas.height = size;
+    wheelBackground = null; // Reset cached background
     drawColorWheel();
 }
 
 function drawColorWheel() {
     const size = canvas.width;
-    const radius = size / 2;
-    const centerX = size / 2;
-    const centerY = size / 2;
-
-    ctx.clearRect(0, 0, size, size);
     
-    for (let y = 0; y < size; y++) {
-        for (let x = 0; x < size; x++) {
-            const dx = x - centerX;
-            const dy = y - centerY;
-            const distance = Math.sqrt(dx * dx + dy * dy);
-            
-            if (distance <= radius) {
-                const hue = (Math.atan2(dy, dx) + Math.PI) / (2 * Math.PI);
-                const saturation = distance / radius;
-                const [r, g, b] = hsvToRgb(hue, saturation, 1);
+    // Draw or use cached background
+    if (!wheelBackground) {
+        wheelBackground = ctx.createImageData(size, size);
+        const data = wheelBackground.data;
+        const radius = size / 2;
+        const centerX = size / 2;
+        const centerY = size / 2;
+
+        for (let y = 0; y < size; y++) {
+            for (let x = 0; x < size; x++) {
+                const dx = x - centerX;
+                const dy = y - centerY;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                const i = (y * size + x) * 4;
                 
-                const alpha = distance > radius - 1 ? 1 - (distance - (radius - 1)) : 1;
-                ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${alpha})`;
-                ctx.fillRect(x, y, 1, 1);
+                if (distance <= radius) {
+                    const hue = (Math.atan2(dy, dx) + Math.PI) / (2 * Math.PI);
+                    const saturation = distance / radius;
+                    const [r, g, b] = hsvToRgb(hue, saturation, 1);
+                    
+                    const alpha = distance > radius - 1 ? 255 * (1 - (distance - (radius - 1))) : 255;
+                    
+                    data[i] = r;
+                    data[i + 1] = g;
+                    data[i + 2] = b;
+                    data[i + 3] = alpha;
+                } else {
+                    data[i + 3] = 0;
+                }
             }
         }
+        ctx.putImageData(wheelBackground, 0, 0);
+    } else {
+        ctx.putImageData(wheelBackground, 0, 0);
     }
 
+    // Draw indicator if needed
     if (currentX !== undefined && currentY !== undefined) {
         drawIndicator(currentX, currentY);
     }
@@ -136,22 +155,29 @@ function updateColor(x, y) {
     const distance = Math.sqrt(dx * dx + dy * dy);
     
     if (distance <= radius) {
-        currentX = x;
-        currentY = y;
-        const hue = (Math.atan2(dy, dx) + Math.PI) / (2 * Math.PI);
-        const saturation = distance / radius;
-        const [r, g, b] = hsvToRgb(hue, saturation, 1);
-        
-        const acesR = r / 255;
-        const acesG = g / 255;
-        const acesB = b / 255;
-        
-        colorDisplay.style.backgroundColor = `rgb(${Math.round(ACESToSRGB(acesR) * 255)}, ${Math.round(ACESToSRGB(acesG) * 255)}, ${Math.round(ACESToSRGB(acesB) * 255)})`;
-        updateLabel(rgbLabel, `ACES RGB (0-1): (${acesR.toFixed(3)}, ${acesG.toFixed(3)}, ${acesB.toFixed(3)})`);
-        updateLabel(document.getElementById('hexLabel'), `HEX: <input type="text" id="hexInput" value="${rgbToHex(r, g, b)}" />`);
-        updateLabel(document.getElementById('hsvLabel'), `HSV: (${Math.round(hue * 360)}°, ${Math.round(saturation * 100)}%, 100%)`);
-        
-        drawColorWheel();
+        // Only update if position actually changed
+        if (currentX !== x || currentY !== y) {
+            currentX = x;
+            currentY = y;
+            
+            const hue = (Math.atan2(dy, dx) + Math.PI) / (2 * Math.PI);
+            const saturation = distance / radius;
+            const [r, g, b] = hsvToRgb(hue, saturation, 1);
+            
+            const acesR = r / 255;
+            const acesG = g / 255;
+            const acesB = b / 255;
+            
+            // Use requestAnimationFrame for smooth updates
+            requestAnimationFrame(() => {
+                colorDisplay.style.backgroundColor = `rgb(${Math.round(ACESToSRGB(acesR) * 255)}, ${Math.round(ACESToSRGB(acesG) * 255)}, ${Math.round(ACESToSRGB(acesB) * 255)})`;
+                updateLabel(rgbLabel, `ACES RGB (0-1): (${acesR.toFixed(3)}, ${acesG.toFixed(3)}, ${acesB.toFixed(3)})`);
+                updateLabel(document.getElementById('hexLabel'), `HEX: <input type="text" id="hexInput" value="${rgbToHex(r, g, b)}" />`);
+                updateLabel(document.getElementById('hsvLabel'), `HSV: (${Math.round(hue * 360)}°, ${Math.round(saturation * 100)}%, 100%)`);
+                
+                drawColorWheel();
+            });
+        }
     }
 }
 
@@ -172,29 +198,32 @@ function updateLabel(element, text) {
 
 function handleStart(e) {
     e.preventDefault();
+    isDragging = true;
     const pos = getEventPosition(e);
     updateColor(pos.x, pos.y);
 }
 
 function handleMove(e) {
     e.preventDefault();
-    if (e.buttons > 0 || e.type === 'touchmove') {
+    if (isDragging) {
         const pos = getEventPosition(e);
         updateColor(pos.x, pos.y);
     }
 }
 
 function handleEnd(e) {
-    // Optional: Add any cleanup or final actions here
+    isDragging = false;
 }
 
 function getEventPosition(e) {
     const rect = canvas.getBoundingClientRect();
-    const clientX = e.clientX || (e.touches && e.touches[0].clientX);
-    const clientY = e.clientY || (e.touches && e.touches[0].clientY);
+    const touch = e.touches ? e.touches[0] : e;
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    
     return {
-        x: clientX - rect.left,
-        y: clientY - rect.top
+        x: (touch.clientX - rect.left) * scaleX,
+        y: (touch.clientY - rect.top) * scaleY
     };
 }
 
