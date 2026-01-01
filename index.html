@@ -19,7 +19,18 @@
 </head>
 
 <body>
-    <div class="glass-container">
+    <div class="glass-container" id="mainContainer">
+        <div class="top-controls">
+            <button id="pipToggle" class="icon-button pip-toggle-btn" title="Global Pop-out (P)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                    stroke-linejoin="round">
+                    <path d="M15 3h6v6"></path>
+                    <path d="M10 14L21 3"></path>
+                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                </svg>
+                <span class="btn-text">POP-OUT</span>
+            </button>
+        </div>
         <header>
             <h1>Nuke Color Wheel</h1>
             <p class="subtitle">ACEScg / AP1 Workflow Tool</p>

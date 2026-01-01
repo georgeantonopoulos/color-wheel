@@ -61,6 +61,152 @@ body {
     }
 }
 
+.drag-handle {
+    display: none;
+    height: 12px;
+    width: 40px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    margin: -4px auto 8px;
+    cursor: grab;
+    transition: background 0.2s;
+}
+
+.drag-handle:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.compact .drag-handle {
+    display: block;
+}
+
+/* Toggle Buttons */
+.top-controls {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    display: flex;
+    gap: 10px;
+    z-index: 100;
+}
+
+.pip-toggle-btn {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    display: none;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    height: 36px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.pip-toggle-btn.supported {
+    display: flex;
+}
+
+.pip-toggle-btn .btn-text {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+}
+
+.pip-toggle-btn svg {
+    width: 16px;
+    height: 16px;
+}
+
+.pip-toggle-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-primary);
+    transform: scale(1.02);
+}
+
+/* Main App UI Adjustments for PiP Mode */
+.pip-mode-active header,
+.pip-mode-active footer,
+.pip-mode-active .saved-section {
+    opacity: 0.4;
+    pointer-events: none;
+}
+
+.pip-body {
+    background: var(--bg-color) !important;
+    margin: 0;
+    padding: 10px !important;
+    overflow: hidden;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.pip-body .glass-container {
+    background: transparent !important;
+    border: none !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    width: 100% !important;
+    max-width: none !important;
+}
+
+.pip-body #copyButton {
+    padding: 8px;
+    font-size: 12px;
+}
+
+.pip-body #valueSlider {
+    -webkit-appearance: none !important;
+    appearance: none !important;
+    width: 200px !important;
+    height: 6px !important;
+    background: rgba(255, 255, 255, 0.2) !important;
+    border-radius: 3px !important;
+    outline: none !important;
+    margin: 15px 0 !important;
+    cursor: pointer !important;
+}
+
+.pip-body #valueSlider::-webkit-slider-thumb {
+    -webkit-appearance: none !important;
+    appearance: none !important;
+    width: 20px !important;
+    height: 20px !important;
+    background: #ffffff !important;
+    border: 2px solid var(--accent-color) !important;
+    border-radius: 50% !important;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5) !important;
+    cursor: ew-resize !important;
+}
+
+.pip-body #colorWheel {
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.5) !important;
+}
+
+.pip-body .wheel-section {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    gap: 12px !important;
+    width: 100% !important;
+}
+
+.pip-body .slider-wrapper {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 4px !important;
+    width: 100% !important;
+    align-items: center !important;
+}
+
+.pip-body .slider-label {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--text-secondary);
+}
+
 header {
     text-align: center;
 }

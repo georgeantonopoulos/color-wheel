@@ -14,6 +14,13 @@ const dropHint = document.getElementById('dropHint');
 const clearButtonContainer = document.getElementById('clearButtonContainer');
 const harmoniesContainer = document.getElementById('harmonies');
 const trashZone = document.getElementById('trashZone');
+const mainContainer = document.getElementById('mainContainer');
+const pipToggle = document.getElementById('pipToggle');
+
+// Check for Document Picture-in-Picture API support
+if ('documentPictureInPicture' in window) {
+    pipToggle.classList.add('supported');
+}
 
 const matrices = {
     aces_ap1: {
@@ -59,9 +66,25 @@ let isImageLoaded = false;
 let loadedImage = null;
 
 function resizeCanvas() {
-    const container = document.querySelector('.glass-container');
+    const container = document.getElementById('mainContainer');
     if (!container) return;
-    const size = Math.min(container.offsetWidth - 40, 300);
+
+    // Check if we are in PiP mode (pipWindow is defined globally)
+    const isPip = typeof pipWindow !== 'undefined' && pipWindow !== null;
+
+    let maxSize, padding, widthSource;
+
+    if (isPip) {
+        maxSize = 250;
+        padding = 40;
+        widthSource = pipWindow.innerWidth;
+    } else {
+        maxSize = 300;
+        padding = 80;
+        widthSource = container.offsetWidth;
+    }
+
+    const size = Math.min(widthSource - padding, maxSize);
     canvas.width = size;
     canvas.height = size;
     drawColorWheel();
@@ -158,21 +181,29 @@ function drawAllIndicators() {
     const primaryPos = { x: currentX, y: currentY };
     const harmonyPositions = harmonies.map(h => getCoords(h, currentSaturation));
 
+    const v = parseFloat(valueSlider.value);
+    // Dynamic contrast: Use black lines on light colors, white lines on dark colors.
+    // We increase opacity for darker wheels to ensure the lines pop.
+    const lineAlpha = v > 0.6 ? 0.4 : 0.7;
+    const lineColor = v > 0.6 ? `rgba(0, 0, 0, ${lineAlpha})` : `rgba(255, 255, 255, ${lineAlpha})`;
+    const subLineColor = v > 0.6 ? `rgba(0, 0, 0, ${lineAlpha * 0.4})` : `rgba(255, 255, 255, ${lineAlpha * 0.4})`;
+
     // 1. Draw Harmony Lines (Technical Guides)
     ctx.setLineDash([4, 4]);
-    ctx.lineWidth = 1;
 
     harmonyPositions.forEach(pos => {
         ctx.beginPath();
         ctx.moveTo(centerX, centerY);
         ctx.lineTo(pos.x, pos.y);
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+        ctx.strokeStyle = lineColor;
+        ctx.lineWidth = 1;
         ctx.stroke();
 
         ctx.beginPath();
         ctx.moveTo(primaryPos.x, primaryPos.y);
         ctx.lineTo(pos.x, pos.y);
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+        ctx.strokeStyle = subLineColor;
+        ctx.lineWidth = 0.8;
         ctx.stroke();
     });
 
@@ -180,7 +211,7 @@ function drawAllIndicators() {
     ctx.beginPath();
     ctx.moveTo(centerX, centerY);
     ctx.lineTo(primaryPos.x, primaryPos.y);
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+    ctx.strokeStyle = lineColor;
     ctx.stroke();
     ctx.setLineDash([]);
 
@@ -590,6 +621,122 @@ colorDisplay.addEventListener('dragstart', (e) => {
     e.dataTransfer.setData('application/x-color-pick', JSON.stringify(colorData));
     e.dataTransfer.effectAllowed = 'copy';
 });
+
+// Keyboard Shortcuts
+window.addEventListener('keydown', (e) => {
+    // Don't trigger if user is typing in an input
+    if (e.target.tagName === 'INPUT') return;
+
+    if (e.key.toLowerCase() === 'p' && 'documentPictureInPicture' in window) {
+        pipToggle.click();
+    }
+    if (e.key.toLowerCase() === 'c') {
+        copyButton.click();
+    }
+    if (e.key.toLowerCase() === 's') {
+        saveButton.click();
+    }
+    if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        valueSlider.value = Math.min(1, parseFloat(valueSlider.value) + 0.05);
+        valueSlider.dispatchEvent(new Event('input'));
+    }
+    if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        valueSlider.value = Math.max(0, parseFloat(valueSlider.value) - 0.05);
+        valueSlider.dispatchEvent(new Event('input'));
+    }
+});
+
+// Global Pop-out (PiP) Logic
+let pipWindow = null;
+
+async function togglePip() {
+    if (pipWindow) {
+        pipWindow.close();
+        return;
+    }
+
+    const wheelSection = document.querySelector('.wheel-section');
+    const actions = document.querySelector('.actions');
+    const mainMain = document.querySelector('main');
+
+    try {
+        pipWindow = await window.documentPictureInPicture.requestWindow({
+            width: 380,
+            height: 480,
+        });
+
+        // Copy relevant styles
+        [...document.styleSheets].forEach((styleSheet) => {
+            try {
+                const cssRules = [...styleSheet.cssRules].map((rule) => rule.cssText).join('');
+                const style = document.createElement('style');
+                style.textContent = cssRules;
+                pipWindow.document.head.appendChild(style);
+            } catch (e) {
+                const link = document.createElement('link');
+                if (styleSheet.href) {
+                    link.rel = 'stylesheet';
+                    link.href = styleSheet.href;
+                    pipWindow.document.head.appendChild(link);
+                }
+            }
+        });
+
+        // Setup PiP body
+        pipWindow.document.body.classList.add('pip-body');
+        const pipContainer = document.createElement('div');
+        pipContainer.className = 'glass-container';
+
+        // Move elements to PiP
+        pipContainer.append(wheelSection, actions);
+        pipWindow.document.body.append(pipContainer);
+
+        // Ensure color wheel stays interactive and sized correctly
+        setTimeout(() => {
+            resizeCanvas();
+        }, 100);
+
+        // Fix: Ensure the slider is interactive in the new document
+        valueSlider.style.pointerEvents = 'all';
+        valueSlider.addEventListener('input', () => {
+            if (currentX !== undefined && currentY !== undefined) {
+                updateColor(currentX, currentY);
+            } else {
+                drawColorWheel();
+            }
+        }, { passive: true });
+
+        // Add a click listener as fallback for some PiP implementations
+        valueSlider.addEventListener('click', (e) => {
+            // Some PiP windows handle range clicks better than slides
+            drawColorWheel();
+        });
+
+        pipWindow.addEventListener('resize', resizeCanvas);
+
+        // Proxy dragging events for the PiP window
+        pipWindow.document.addEventListener('mousemove', (e) => handleMove(e));
+        pipWindow.document.addEventListener('mouseup', (e) => handleEnd(e));
+
+        // Handle closure
+        pipWindow.addEventListener('pagehide', () => {
+            document.body.classList.remove('pip-mode-active');
+            // Return elements to original home
+            mainMain.prepend(wheelSection);
+            const controlsSection = document.querySelector('.controls-section');
+            controlsSection.after(actions);
+            pipWindow = null;
+            resizeCanvas();
+        });
+    } catch (err) {
+        console.error('PiP failed', err);
+    }
+}
+
+pipToggle.addEventListener('click', togglePip);
+
 
 savedColorsContainer.addEventListener('dragover', (e) => {
     if (e.dataTransfer.types.includes('application/x-color-pick')) {

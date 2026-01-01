@@ -119,7 +119,7 @@ CSS: Split #colorDisplay into #colorCurrent (active hover) and #colorPrevious (l
 
 JS: Update logic to only change Current on hover, and update Previous on click.
 
-Task 8: Keyboard Shortcuts
+Task 8: Keyboard Shortcuts [COMPLETED]
 
 Context: VFX artists use hotkeys.
 
@@ -141,7 +141,7 @@ Generate :root { --color-1: #hex; } block from savedColors.
 
 Copy to clipboard.
 
-Task 10: Compact Mode
+Task 10: Compact Mode [REPLACED BY GLOBAL POP-OUT]
 
 Context: Screen real estate management.
 
