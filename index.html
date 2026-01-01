@@ -4,41 +4,87 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Color Wheel</title>
+    <title>Nuke Color Wheel</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
-    <meta name="description" content="Interactive Color Wheel Tool">
+    <meta name="description" content="Professional VFX Color Wheel for Nuke workflows">
     <link rel="icon" href="favicon.ico" type="image/x-icon">
     <meta name="author" content="George Antonopoulos">
     <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#3a3a3a">
+    <meta name="theme-color" content="#121212">
 </head>
 
 <body>
-    <div class="container">
-        <h1>Color Wheel</h1>
-        <div class="wheel-area">
-            <canvas id="colorWheel" width="300" height="300"></canvas>
-            <input type="range" id="valueSlider" min="0" max="1" step="0.01" value="1">
-        </div>
+    <div class="glass-container">
+        <header>
+            <h1>Nuke Color Wheel</h1>
+            <p class="subtitle">ACEScg / AP1 Workflow Tool</p>
+        </header>
 
-        <div class="controls-area">
-            <select id="colorSpace">
-                <option value="aces_ap1">ACES AP1</option>
-                <option value="aces_cg">ACEScg</option>
-                <option value="linear_srgb">Linear sRGB</option>
-                <option value="rec_709">Rec.709</option>
-            </select>
-        </div>
+        <main>
+            <div class="wheel-section">
+                <div class="wheel-wrapper">
+                    <canvas id="colorWheel" width="300" height="300"></canvas>
+                    <div id="dropHint" class="drop-hint">Drop Image to Sample</div>
+                </div>
+                <div class="slider-wrapper">
+                    <input type="range" id="valueSlider" min="0" max="1" step="0.01" value="1">
+                    <span class="slider-label">VALUE</span>
+                </div>
+            </div>
 
-        <div id="colorInfo">
-            <div id="colorDisplay"></div>
-            <div id="rgbLabel">RGB (0-1): </div>
-            <div id="hexLabel">HEX: </div>
-            <div id="hsvLabel">HSV: </div>
-        </div>
-        <button id="copyButton">Copy Nuke Node</button>
-        <button id="saveButton">Save Color</button>
-        <div id="savedColors"></div>
+            <div class="controls-section">
+                <div class="select-wrapper">
+                    <label for="colorSpace">Output Color Space</label>
+                    <select id="colorSpace">
+                        <option value="aces_ap1">ACES AP1</option>
+                        <option value="aces_cg">ACEScg</option>
+                        <option value="linear_srgb">Linear sRGB</option>
+                        <option value="rec_709">Rec.709</option>
+                    </select>
+                </div>
+                <button id="resetWheel" class="secondary-button" style="display: none;">Reset to Wheel</button>
+            </div>
+
+            <section id="colorInfo">
+                <div class="display-container">
+                    <div id="colorDisplay"></div>
+                </div>
+                <div class="info-card">
+                    <div class="data-item">
+                        <span class="label">RGB</span>
+                        <div id="rgbLabel" class="value mono">0.000, 0.000, 0.000</div>
+                    </div>
+                    <div class="data-item">
+                        <span class="label">HEX</span>
+                        <div id="hexLabel" class="value mono">#000000</div>
+                    </div>
+                    <div class="data-item">
+                        <span class="label">HSV</span>
+                        <div id="hsvLabel" class="value mono">0°, 0%, 0%</div>
+                    </div>
+                </div>
+            </section>
+
+            <div class="actions">
+                <button id="copyButton" class="primary-button">Copy Nuke Node</button>
+                <button id="saveButton" class="primary-button">Save Swatch</button>
+            </div>
+
+            <section class="saved-section">
+                <h3>Saved Palettes</h3>
+                <div id="savedColors"></div>
+                <div id="clearButtonContainer" class="clear-footer"></div>
+            </section>
+        </main>
+
+        <footer>
+            <p>Drag & drop image on wheel to sample pixels</p>
+        </footer>
     </div>
 
     <script src="script.js"></script>

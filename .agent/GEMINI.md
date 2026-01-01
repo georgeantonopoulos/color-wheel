@@ -15,6 +15,7 @@ This is a lightweight, vanilla JavaScript web application designed primarily for
 Core: HTML5, CSS3, Vanilla JavaScript (ES6+).
 
 No Frameworks: intentionally dependency-free. No React, Vue, or bundlers.
+Static Application: Runs directly from file system (index.html). No local server required.
 
 State Management: Simple in-memory variables (currentX, currentY, savedColors) and planned localStorage.
 
@@ -84,7 +85,7 @@ JS: Implement transform matrices/math for these spaces.
 
 Update display logic to respect the selected space.
 
-Task 5: Reference Image Dropper
+Task 5: Reference Image Dropper [COMPLETED]
 
 Context: Artists pick colors from concept art.
 
@@ -149,3 +150,24 @@ Instructions:
 CSS: Create .compact class hiding non-essentials (Header, Instructions, Saved List).
 
 JS: Add toggle button to switch modes.
+
+Task 11: Professional Visual Assets [COMPLETED]
+
+Context: The project needs a slicker, more professional look.
+
+Instructions:
+
+Image Generation: Create a high-end `color_wheel.jpeg` and a minimalist `favicon.ico`.
+
+Conversion: Use `sips` to convert generated PNGs to JPEG and ICO formats.
+
+Integration: Ensure they are correctly placed in the root directory.
+
+Task 12: Professional UI Overhaul [IN PROGRESS]
+
+Context: High-end VFX aesthetic with glassmorphism and modern typography.
+
+Instructions:
+- Update index.html for better structure.
+- Update styles.css with professional dark theme.
+- Ensure all elements are accessible and functional.

@@ -2,11 +2,16 @@ const canvas = document.getElementById('colorWheel');
 const ctx = canvas.getContext('2d');
 const colorDisplay = document.getElementById('colorDisplay');
 const rgbLabel = document.getElementById('rgbLabel');
+const hexLabel = document.getElementById('hexLabel');
+const hsvLabel = document.getElementById('hsvLabel');
 const copyButton = document.getElementById('copyButton');
 const saveButton = document.getElementById('saveButton');
 const savedColorsContainer = document.getElementById('savedColors');
 const valueSlider = document.getElementById('valueSlider');
 const colorSpaceSelect = document.getElementById('colorSpace');
+const resetWheelButton = document.getElementById('resetWheel');
+const dropHint = document.getElementById('dropHint');
+const clearButtonContainer = document.getElementById('clearButtonContainer');
 
 const matrices = {
     aces_ap1: {
@@ -47,9 +52,12 @@ let savedColors = JSON.parse(localStorage.getItem('savedColors')) || [];
 
 let currentX, currentY;
 let isDragging = false;
+let isImageLoaded = false;
+let loadedImage = null;
 
 function resizeCanvas() {
-    const container = document.querySelector('.container');
+    const container = document.querySelector('.glass-container');
+    if (!container) return;
     const size = Math.min(container.offsetWidth - 40, 300);
     canvas.width = size;
     canvas.height = size;
@@ -59,50 +67,64 @@ function resizeCanvas() {
 function drawColorWheel() {
     const size = canvas.width;
     if (size === 0) return;
-    const radius = size / 2;
     const centerX = size / 2;
     const centerY = size / 2;
 
-    const imageData = ctx.createImageData(size, size);
-    const data = imageData.data;
-    const value = parseFloat(valueSlider.value);
+    if (isImageLoaded && loadedImage) {
+        resetWheelButton.style.display = 'block';
+        ctx.clearRect(0, 0, size, size);
+        const imgWidth = loadedImage.width;
+        const imgHeight = loadedImage.height;
+        const ratio = Math.min(size / imgWidth, size / imgHeight);
+        const newWidth = imgWidth * ratio;
+        const newHeight = imgHeight * ratio;
+        const xOffset = (size - newWidth) / 2;
+        const yOffset = (size - newHeight) / 2;
+        ctx.drawImage(loadedImage, xOffset, yOffset, newWidth, newHeight);
+    } else {
+        const radius = size / 2;
+        const imageData = ctx.createImageData(size, size);
+        const data = imageData.data;
+        const value = parseFloat(valueSlider.value);
 
-    for (let y = 0; y < size; y++) {
-        for (let x = 0; x < size; x++) {
-            const dx = x - centerX;
-            const dy = y - centerY;
-            const distance = Math.sqrt(dx * dx + dy * dy);
-            const index = (y * size + x) * 4;
+        for (let y = 0; y < size; y++) {
+            for (let x = 0; x < size; x++) {
+                const dx = x - centerX;
+                const dy = y - centerY;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                const index = (y * size + x) * 4;
 
-            if (distance <= radius) {
-                const hue = (Math.atan2(dy, dx) + Math.PI) / (2 * Math.PI);
-                const saturation = distance / radius;
+                if (distance <= radius) {
+                    const hue = (Math.atan2(dy, dx) + Math.PI) / (2 * Math.PI);
+                    const saturation = distance / radius;
 
-                // Treat HSV as values in the SELECTED space
-                const [rTarget, gTarget, bTarget] = hsvToRgbLin(hue, saturation, value);
+                    // Treat HSV as values in the SELECTED space
+                    const [rTarget, gTarget, bTarget] = hsvToRgbLin(hue, saturation, value);
 
-                // Convert TARGET space to linear sRGB for display
-                const selectedSpace = colorSpaceSelect.value;
-                const matrix = matrices[selectedSpace].toLinearSRGB;
-                const [rLin, gLin, bLin] = applyMatrix([rTarget, gTarget, bTarget], matrix);
+                    // Convert TARGET space to linear sRGB for display
+                    const selectedSpace = colorSpaceSelect.value;
+                    const matrix = matrices[selectedSpace].toLinearSRGB;
+                    const [rLin, gLin, bLin] = applyMatrix([rTarget, gTarget, bTarget], matrix);
 
-                // Convert linear sRGB to sRGB for consistent display brightness
-                const sR = Math.max(0, Math.min(255, Math.round(linearToSRGB(rLin) * 255)));
-                const sG = Math.max(0, Math.min(255, Math.round(linearToSRGB(gLin) * 255)));
-                const sB = Math.max(0, Math.min(255, Math.round(linearToSRGB(bLin) * 255)));
+                    // Convert linear sRGB to sRGB for consistent display brightness
+                    const sR = Math.max(0, Math.min(255, Math.round(linearToSRGB(rLin) * 255)));
+                    const sG = Math.max(0, Math.min(255, Math.round(linearToSRGB(gLin) * 255)));
+                    const sB = Math.max(0, Math.min(255, Math.round(linearToSRGB(bLin) * 255)));
 
-                const alpha = distance > radius - 1 ? (1 - (distance - (radius - 1))) * 255 : 255;
+                    const alpha = distance > radius - 1 ? (1 - (distance - (radius - 1))) * 255 : 255;
 
-                data[index] = sR;
-                data[index + 1] = sG;
-                data[index + 2] = sB;
-                data[index + 3] = alpha;
-            } else {
-                data[index + 3] = 0;
+                    data[index] = sR;
+                    data[index + 1] = sG;
+                    data[index + 2] = sB;
+                    data[index + 3] = alpha;
+                } else {
+                    data[index + 3] = 0;
+                }
             }
         }
+        ctx.putImageData(imageData, 0, 0);
+        resetWheelButton.style.display = 'none';
     }
-    ctx.putImageData(imageData, 0, 0);
 
     if (currentX !== undefined && currentY !== undefined) {
         drawIndicator(currentX, currentY);
@@ -180,56 +202,85 @@ function rgbToHex(r, g, b) {
 
 function updateColor(x, y) {
     const size = canvas.width;
-    const radius = size / 2;
-    const centerX = size / 2;
-    const centerY = size / 2;
-    const dx = x - centerX;
-    const dy = y - centerY;
-    const distance = Math.sqrt(dx * dx + dy * dy);
+    let outR, outG, outB, hue, saturation, value, sR, sG, sB;
 
-    if (distance <= radius) {
+    if (isImageLoaded) {
+        const pixelData = ctx.getImageData(x, y, 1, 1).data;
+        sR = pixelData[0];
+        sG = pixelData[1];
+        sB = pixelData[2];
+
+        const linR = sRGBToLinear(sR / 255);
+        const linG = sRGBToLinear(sG / 255);
+        const linB = sRGBToLinear(sB / 255);
+
+        const selectedSpace = colorSpaceSelect.value;
+        const toTargetMatrix = matrices[selectedSpace].toTarget;
+        [outR, outG, outB] = applyMatrix([linR, linG, linB], toTargetMatrix);
+
+        [hue, saturation, value] = rgbToHsvUnscaled(sR, sG, sB);
         currentX = x;
         currentY = y;
-        const hue = (Math.atan2(dy, dx) + Math.PI) / (2 * Math.PI);
-        const saturation = distance / radius;
-        const value = parseFloat(valueSlider.value);
+    } else {
+        const radius = size / 2;
+        const centerX = size / 2;
+        const centerY = size / 2;
+        const dx = x - centerX;
+        const dy = y - centerY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
 
-        // Treat picked HSV as values in the TARGET color space
-        const [outR, outG, outB] = hsvToRgbLin(hue, saturation, value);
+        if (distance <= radius) {
+            currentX = x;
+            currentY = y;
+            hue = (Math.atan2(dy, dx) + Math.PI) / (2 * Math.PI);
+            saturation = distance / radius;
+            value = parseFloat(valueSlider.value);
 
-        // Convert TARGET space to linear sRGB for monitor display
-        const selectedSpace = colorSpaceSelect.value;
-        const toLinMatrix = matrices[selectedSpace].toLinearSRGB;
-        const [rLin, gLin, bLin] = applyMatrix([outR, outG, outB], toLinMatrix);
+            // Treat picked HSV as values in the TARGET color space
+            const [rTarget, gTarget, bTarget] = hsvToRgbLin(hue, saturation, value);
+            outR = rTarget;
+            outG = gTarget;
+            outB = bTarget;
 
-        // Display color is always sRGB-mapped for the monitor
-        const sR = Math.max(0, Math.min(255, Math.round(linearToSRGB(rLin) * 255)));
-        const sG = Math.max(0, Math.min(255, Math.round(linearToSRGB(gLin) * 255)));
-        const sB = Math.max(0, Math.min(255, Math.round(linearToSRGB(bLin) * 255)));
+            // Convert TARGET space to linear sRGB for monitor display
+            const selectedSpace = colorSpaceSelect.value;
+            const toLinMatrix = matrices[selectedSpace].toLinearSRGB;
+            const [rLin, gLin, bLin] = applyMatrix([outR, outG, outB], toLinMatrix);
 
-        colorDisplay.style.backgroundColor = `rgb(${sR}, ${sG}, ${sB})`;
-
-        const spaceLabel = colorSpaceSelect.options[colorSpaceSelect.selectedIndex].text;
-        updateLabel(rgbLabel, `${spaceLabel} RGB (0-1): (${outR.toFixed(3)}, ${outG.toFixed(3)}, ${outB.toFixed(3)})`);
-        updateLabel(document.getElementById('hexLabel'), `HEX: <input type="text" id="hexInput" value="${rgbToHex(sR, sG, sB)}" />`);
-        updateLabel(document.getElementById('hsvLabel'), `HSV: (${Math.round(hue * 360)}°, ${Math.round(saturation * 100)}%, ${Math.round(value * 100)}%)`);
-
-        drawColorWheel();
-    }
-}
-
-function updateLabel(element, text) {
-    if (element) {
-        element.innerHTML = text;
-        if (element.id === 'hexLabel') {
-            const hexInput = document.getElementById('hexInput');
-            if (hexInput) {
-                hexInput.addEventListener('change', (e) => updateFromHex(e.target.value));
-                hexInput.addEventListener('blur', (e) => updateFromHex(e.target.value));
-            }
+            // Display color is always sRGB-mapped for the monitor
+            sR = Math.max(0, Math.min(255, Math.round(linearToSRGB(rLin) * 255)));
+            sG = Math.max(0, Math.min(255, Math.round(linearToSRGB(gLin) * 255)));
+            sB = Math.max(0, Math.min(255, Math.round(linearToSRGB(bLin) * 255)));
+        } else {
+            return;
         }
     }
+
+    colorDisplay.style.backgroundColor = `rgb(${sR}, ${sG}, ${sB})`;
+
+    const spaceLabel = colorSpaceSelect.options[colorSpaceSelect.selectedIndex].text;
+
+    // Update labels with cleaned up values
+    rgbLabel.textContent = `${outR.toFixed(3)}, ${outG.toFixed(3)}, ${outB.toFixed(3)}`;
+    hexLabel.innerHTML = `<input type="text" id="hexInput" value="${rgbToHex(sR, sG, sB)}" />`;
+    hsvLabel.textContent = `${Math.round(hue * 360)}°, ${Math.round(saturation * 100)}%, ${Math.round(value * 100)}%`;
+
+    // Re-attach hex input listener
+    const hexInput = document.getElementById('hexInput');
+    if (hexInput) {
+        hexInput.addEventListener('change', (e) => updateFromHex(e.target.value));
+        hexInput.addEventListener('blur', (e) => updateFromHex(e.target.value));
+    }
+
+    drawColorWheel();
 }
+
+function rgbToHsvUnscaled(r, g, b) {
+    const [h, s, v] = rgbToHsv(r, g, b);
+    return [h, s, v];
+}
+
+// function updateLabel(element, text) { ... } REMOVED AS IT WAS REDUNDANT
 
 function handleStart(e) {
     e.preventDefault();
@@ -274,6 +325,45 @@ canvas.addEventListener('touchmove', handleMove);
 canvas.addEventListener('touchend', handleEnd);
 canvas.addEventListener('touchcancel', handleEnd);
 
+canvas.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dropHint.style.opacity = '1';
+    canvas.style.transform = 'scale(1.05)';
+});
+
+canvas.addEventListener('dragleave', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dropHint.style.opacity = '0';
+    canvas.style.transform = 'scale(1)';
+});
+
+canvas.addEventListener('drop', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dropHint.style.opacity = '0';
+    canvas.style.transform = 'scale(1)';
+
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+        const file = files[0];
+        if (file.type.startsWith('image/')) {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const img = new Image();
+                img.onload = () => {
+                    isImageLoaded = true;
+                    loadedImage = img;
+                    drawColorWheel();
+                };
+                img.src = event.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+    }
+});
+
 colorSpaceSelect.addEventListener('change', () => {
     drawColorWheel();
     if (currentX !== undefined && currentY !== undefined) {
@@ -304,6 +394,14 @@ copyButton.addEventListener('click', () => {
     }
 });
 
+resetWheelButton.addEventListener('click', () => {
+    isImageLoaded = false;
+    loadedImage = null;
+    currentX = undefined;
+    currentY = undefined;
+    drawColorWheel();
+});
+
 saveButton.addEventListener('click', saveColor);
 
 function saveColor() {
@@ -324,12 +422,14 @@ function saveColor() {
 
 function updateSavedColorsDisplay() {
     savedColorsContainer.innerHTML = '';
+    clearButtonContainer.innerHTML = '';
+
     if (savedColors.length > 0) {
         const clearButton = document.createElement('button');
         clearButton.id = 'clearSavedColors';
-        clearButton.innerHTML = '&times;';
+        clearButton.textContent = 'Clear All';
         clearButton.addEventListener('click', clearSavedColors);
-        savedColorsContainer.appendChild(clearButton);
+        clearButtonContainer.appendChild(clearButton);
     }
 
     savedColors.forEach((color) => {
@@ -357,9 +457,16 @@ function revertToColor(color) {
     colorDisplay.style.backgroundColor = color.rgb;
 
     // Use stored labels if they exist, or reconstruct
-    updateLabel(rgbLabel, color.rgbOutput || color.aces || `RGB (0-1): ${color.rgb.match(/\d+/g).map(v => (parseInt(v) / 255).toFixed(3)).join(', ')}`);
-    updateLabel(document.getElementById('hexLabel'), `HEX: <input type="text" id="hexInput" value="${color.hex}" />`);
-    updateLabel(document.getElementById('hsvLabel'), `HSV: ${color.hsv}`);
+    rgbLabel.textContent = color.rgbOutput ? color.rgbOutput.split(': ')[1] : color.rgb.match(/\d+/g).map(v => (parseInt(v) / 255).toFixed(3)).join(', ');
+    hexLabel.innerHTML = `<input type="text" id="hexInput" value="${color.hex}" />`;
+    hsvLabel.textContent = color.hsv.replace(/[()]/g, '');
+
+    // Re-attach hex input listener
+    const hexInput = document.getElementById('hexInput');
+    if (hexInput) {
+        hexInput.addEventListener('change', (e) => updateFromHex(e.target.value));
+        hexInput.addEventListener('blur', (e) => updateFromHex(e.target.value));
+    }
 
     // Extract Value from HSV string (e.g., "(120°, 50%, 80%)")
     const hsvMatch = color.hsv.match(/(\d+)%\)/);
@@ -430,9 +537,16 @@ function updateFromHex(hex) {
         const [outR, outG, outB] = transformedRgb;
 
         const spaceLabel = colorSpaceSelect.options[colorSpaceSelect.selectedIndex].text;
-        updateLabel(rgbLabel, `${spaceLabel} RGB (0-1): (${outR.toFixed(3)}, ${outG.toFixed(3)}, ${outB.toFixed(3)})`);
-        updateLabel(document.getElementById('hexLabel'), `HEX: <input type="text" id="hexInput" value="${hex}" />`);
-        updateLabel(document.getElementById('hsvLabel'), `HSV: (${Math.round(h * 360)}°, ${Math.round(s * 100)}%, ${Math.round(v * 100)}%)`);
+        rgbLabel.textContent = `${outR.toFixed(3)}, ${outG.toFixed(3)}, ${outB.toFixed(3)}`;
+        hexLabel.innerHTML = `<input type="text" id="hexInput" value="${hex}" />`;
+        hsvLabel.textContent = `${Math.round(h * 360)}°, ${Math.round(s * 100)}%, ${Math.round(v * 100)}%`;
+
+        // Re-attach hex input listener
+        const hexInput = document.getElementById('hexInput');
+        if (hexInput) {
+            hexInput.addEventListener('change', (e) => updateFromHex(e.target.value));
+            hexInput.addEventListener('blur', (e) => updateFromHex(e.target.value));
+        }
 
         // Update color wheel position
         currentX = x;
@@ -444,5 +558,7 @@ function updateFromHex(hex) {
 }
 
 window.addEventListener('resize', resizeCanvas);
-resizeCanvas();
+
+// Small delay to ensure container dimensions are calculated
+setTimeout(resizeCanvas, 0);
 updateSavedColorsDisplay();
