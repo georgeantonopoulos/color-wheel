@@ -71,6 +71,10 @@ let isDragging = false;
 let isImageLoaded = false;
 let loadedImage = null;
 
+// Offscreen canvas for clean sampling (no indicators)
+const offscreenCanvas = document.createElement('canvas');
+const offscreenCtx = offscreenCanvas.getContext('2d', { willReadFrequently: true });
+
 function resizeCanvas() {
     const container = document.getElementById('mainContainer');
     if (!container) return;
@@ -93,6 +97,10 @@ function resizeCanvas() {
     const size = Math.min(widthSource - padding, maxSize);
     canvas.width = size;
     canvas.height = size;
+
+    offscreenCanvas.width = size;
+    offscreenCanvas.height = size;
+
     drawColorWheel();
 }
 
@@ -105,6 +113,8 @@ function drawColorWheel() {
     if (isImageLoaded && loadedImage) {
         resetWheelButton.style.display = 'block';
         ctx.clearRect(0, 0, size, size);
+        offscreenCtx.clearRect(0, 0, size, size);
+
         const imgWidth = loadedImage.width;
         const imgHeight = loadedImage.height;
         const ratio = Math.min(size / imgWidth, size / imgHeight);
@@ -112,7 +122,9 @@ function drawColorWheel() {
         const newHeight = imgHeight * ratio;
         const xOffset = (size - newWidth) / 2;
         const yOffset = (size - newHeight) / 2;
+
         ctx.drawImage(loadedImage, xOffset, yOffset, newWidth, newHeight);
+        offscreenCtx.drawImage(loadedImage, xOffset, yOffset, newWidth, newHeight);
     } else {
         const radius = size / 2;
         const imageData = ctx.createImageData(size, size);
@@ -330,7 +342,8 @@ function updateColor(x, y) {
     let outR, outG, outB, hue, saturation, value, sR, sG, sB;
 
     if (isImageLoaded) {
-        const pixelData = ctx.getImageData(x, y, 1, 1).data;
+        // Sample from offscreen canvas for a "clean" pixel pick (no indicators)
+        const pixelData = offscreenCtx.getImageData(x, y, 1, 1).data;
         sR = pixelData[0];
         sG = pixelData[1];
         sB = pixelData[2];
@@ -447,6 +460,11 @@ function updateColor(x, y) {
             });
             swatch.addEventListener('dragend', handleDragEnd);
 
+            // Click to pick harmony
+            swatch.addEventListener('click', () => {
+                updateFromHex(harmonyData.hex);
+            });
+
             const label = document.createElement('span');
             label.className = 'harmony-label';
             label.textContent = harmony.label;
@@ -460,54 +478,9 @@ function updateColor(x, y) {
     drawColorWheel();
 }
 
+// Unify hex update to the existing version at bottom
 function updateColorFromHex(hex) {
-    // Basic hex to RGB
-    const r = parseInt(hex.slice(1, 3), 16);
-    const g = parseInt(hex.slice(3, 5), 16);
-    const b = parseInt(hex.slice(5, 7), 16);
-
-    const linR = sRGBToLinear(r / 255);
-    const linG = sRGBToLinear(g / 255);
-    const linB = sRGBToLinear(b / 255);
-
-    const selectedSpace = colorSpaceSelect.value;
-    const toTargetMatrix = matrices[selectedSpace].toTarget;
-    const [outR, outG, outB] = applyMatrix([linR, linG, linB], toTargetMatrix);
-
-    const [hue, saturation, value] = rgbToHsvUnscaled(r, g, b);
-
-    // Update global state
-    currentHue = hue;
-    currentSaturation = saturation;
-    // We update the value slider to match the picked color's brightness
-    valueSlider.value = value.toFixed(2);
-
-    // Map the Hue/Saturation back to canvas coordinates
-    const size = canvas.width;
-    const centerX = size / 2;
-    const centerY = size / 2;
-    const radius = size / 2;
-    const angle = hue * 2 * Math.PI - Math.PI;
-    currentX = centerX + saturation * radius * Math.cos(angle);
-    currentY = centerY + saturation * radius * Math.sin(angle);
-
-    // Now call the standard update UI logic with these values
-    // We can just call updateColor with these coordinates if we want,
-    // but updateColor has its own logic for isImageLoaded.
-    // Let's just manually update UI here to be safe and avoid recursion.
-    colorDisplay.style.backgroundColor = `rgb(${r}, ${g}, ${b})`;
-    rgbLabel.textContent = `${outR.toFixed(3)}, ${outG.toFixed(3)}, ${outB.toFixed(3)}`;
-    hexLabel.innerHTML = `<input type="text" id="hexInput" value="${hex.toUpperCase()}" />`;
-    hsvLabel.textContent = `${Math.round(hue * 360)}°, ${Math.round(saturation * 100)}%, ${Math.round(value * 100)}%`;
-
-    // Re-attach hex input listener
-    const hexInput = document.getElementById('hexInput');
-    if (hexInput) {
-        hexInput.addEventListener('change', (e) => updateFromHex(e.target.value));
-        hexInput.addEventListener('blur', (e) => updateFromHex(e.target.value));
-    }
-
-    drawColorWheel();
+    updateFromHex(hex);
 }
 
 async function startEyeDropper() {
