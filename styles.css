@@ -250,6 +250,44 @@ h1 {
     transform: scale(1.02);
 }
 
+.eye-dropper-btn {
+    position: absolute;
+    bottom: -10px;
+    right: -10px;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: var(--accent-color);
+    color: white;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 4px 15px rgba(0, 122, 255, 0.4), inset 0 0 0 1px rgba(255, 255, 255, 0.2);
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    z-index: 10;
+    padding: 0;
+}
+
+.eye-dropper-btn.supported {
+    display: flex;
+}
+
+.eye-dropper-btn svg {
+    width: 20px;
+    height: 20px;
+}
+
+.eye-dropper-btn:hover {
+    transform: scale(1.1) rotate(-10deg);
+    background: var(--accent-hover);
+    box-shadow: 0 6px 20px rgba(0, 122, 255, 0.5);
+}
+
+.eye-dropper-btn:active {
+    transform: scale(0.95);
+}
+
 .drop-hint {
     position: absolute;
     inset: 0;
