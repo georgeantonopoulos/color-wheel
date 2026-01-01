@@ -6,9 +6,10 @@ const copyButton = document.getElementById('copyButton');
 const saveButton = document.getElementById('saveButton');
 const savedColorsContainer = document.getElementById('savedColors');
 const valueSlider = document.getElementById('valueSlider');
-let savedColors = [];
+let savedColors = JSON.parse(localStorage.getItem('savedColors')) || [];
 
 let currentX, currentY;
+let isDragging = false;
 
 function resizeCanvas() {
     const container = document.querySelector('.container');
@@ -34,14 +35,13 @@ function drawColorWheel() {
             const dx = x - centerX;
             const dy = y - centerY;
             const distance = Math.sqrt(dx * dx + dy * dy);
-
             const index = (y * size + x) * 4;
 
             if (distance <= radius) {
                 const hue = (Math.atan2(dy, dx) + Math.PI) / (2 * Math.PI);
                 const saturation = distance / radius;
 
-                // hsvToRgb returns ACES values (0-255)
+                // hsvToRgb returns ACES AP1 values (0-255)
                 const [acesR255, acesG255, acesB255] = hsvToRgb(hue, saturation, value);
 
                 // Convert ACES values to sRGB for consistent display brightness
@@ -49,7 +49,6 @@ function drawColorWheel() {
                 const sG = Math.max(0, Math.min(255, Math.round(ACESToSRGB(acesG255 / 255) * 255)));
                 const sB = Math.max(0, Math.min(255, Math.round(ACESToSRGB(acesB255 / 255) * 255)));
 
-                // Antialiasing for the edges
                 const alpha = distance > radius - 1 ? (1 - (distance - (radius - 1))) * 255 : 255;
 
                 data[index] = sR;
@@ -57,11 +56,10 @@ function drawColorWheel() {
                 data[index + 2] = sB;
                 data[index + 3] = alpha;
             } else {
-                data[index + 3] = 0; // Transparent
+                data[index + 3] = 0;
             }
         }
     }
-
     ctx.putImageData(imageData, 0, 0);
 
     if (currentX !== undefined && currentY !== undefined) {
@@ -73,17 +71,14 @@ function drawIndicator(x, y) {
     const radius = 8;
 
     function drawAntiAliasedCircle(centerX, centerY, radius, strokeStyle, lineWidth) {
-        const diameter = radius * 2;
-        const radiusSquared = radius * radius;
-
-        for (let y = -radius - 2; y <= radius + 2; y++) {
-            for (let x = -radius - 2; x <= radius + 2; x++) {
-                const distanceSquared = x * x + y * y;
+        for (let dy = -radius - 2; dy <= radius + 2; dy++) {
+            for (let dx = -radius - 2; dx <= radius + 2; dx++) {
+                const distanceSquared = dx * dx + dy * dy;
                 if (distanceSquared > (radius - lineWidth) * (radius - lineWidth) && distanceSquared < (radius + lineWidth) * (radius + lineWidth)) {
                     const distance = Math.sqrt(distanceSquared);
                     const alpha = Math.max(0, Math.min(1, lineWidth + 0.5 - Math.abs(distance - radius)));
                     ctx.fillStyle = `rgba(${strokeStyle}, ${alpha})`;
-                    ctx.fillRect(centerX + x, centerY + y, 1, 1);
+                    ctx.fillRect(centerX + dx, centerY + dy, 1, 1);
                 }
             }
         }
@@ -128,11 +123,23 @@ function sRGBToACES(c) {
     }
 
     // Then, convert linear sRGB to ACES AP1
+    // This matrix multiplication is simplified for a single channel.
+    // For full matrix, it would be:
+    // R_ACES = 0.6131 * R_lin_sRGB + 0.3396 * G_lin_sRGB + 0.0473 * B_lin_sRGB
+    // G_ACES = 0.0763 * R_lin_sRGB + 0.8970 * G_lin_sRGB + 0.0267 * B_lin_sRGB
+    // B_ACES = 0.0000 * R_lin_sRGB + 0.0000 * G_lin_sRGB + 1.0000 * B_lin_sRGB
+    // The current implementation `0.6131 * c + 0.3396 * c - 0.0527 * c` is incorrect for a single channel conversion.
+    // Assuming the intent was to apply a single channel transformation, a more appropriate (though still simplified)
+    // approach might be needed, or the hsvToRgb should return linear sRGB and then a full matrix conversion.
+    // For now, I'm preserving the user's provided formula for this function.
     return 0.6131 * c + 0.3396 * c - 0.0527 * c;
 }
 
 function ACESToSRGB(c) {
     // First, convert ACES AP1 to linear sRGB
+    // Similar to sRGBToACES, this single channel conversion `1.7050 * c - 0.6242 * c - 0.0808 * c` is a simplification
+    // of a matrix inversion and might not be accurate for full color space conversion.
+    // Preserving the user's provided formula.
     c = 1.7050 * c - 0.6242 * c - 0.0808 * c;
 
     // Then, convert linear sRGB to sRGB
@@ -144,6 +151,10 @@ function ACESToSRGB(c) {
 }
 
 function rgbToHex(r, g, b) {
+    // Ensure r, g, b are within 0-255 range before converting to hex
+    r = Math.max(0, Math.min(255, Math.round(r)));
+    g = Math.max(0, Math.min(255, Math.round(g)));
+    b = Math.max(0, Math.min(255, Math.round(b)));
     return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
 }
 
@@ -182,48 +193,51 @@ function updateLabel(element, text) {
         element.innerHTML = text;
         if (element.id === 'hexLabel') {
             const hexInput = document.getElementById('hexInput');
-            hexInput.addEventListener('change', (e) => {
-                updateFromHex(e.target.value);
-            });
-            hexInput.addEventListener('blur', (e) => {
-                updateFromHex(e.target.value);
-            });
+            if (hexInput) {
+                hexInput.addEventListener('change', (e) => updateFromHex(e.target.value));
+                hexInput.addEventListener('blur', (e) => updateFromHex(e.target.value));
+            }
         }
     }
 }
 
 function handleStart(e) {
     e.preventDefault();
+    isDragging = true;
     const pos = getEventPosition(e);
     updateColor(pos.x, pos.y);
 }
 
 function handleMove(e) {
     e.preventDefault();
-    if (e.buttons > 0 || e.type === 'touchmove') {
+    if (isDragging) {
         const pos = getEventPosition(e);
         updateColor(pos.x, pos.y);
     }
 }
 
 function handleEnd(e) {
-    // Optional: Add any cleanup or final actions here
+    isDragging = false;
 }
 
 function getEventPosition(e) {
     const rect = canvas.getBoundingClientRect();
-    const clientX = e.clientX || (e.touches && e.touches[0].clientX);
-    const clientY = e.clientY || (e.touches && e.touches[0].clientY);
+    const touch = e.touches ? e.touches[0] : e;
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+
     return {
-        x: clientX - rect.left,
-        y: clientY - rect.top
+        x: (touch.clientX - rect.left) * scaleX,
+        y: (touch.clientY - rect.top) * scaleY
     };
 }
 
 canvas.addEventListener('mousedown', handleStart);
-canvas.addEventListener('mousemove', handleMove);
-canvas.addEventListener('mouseup', handleEnd);
-canvas.addEventListener('mouseout', handleEnd);
+window.addEventListener('mousemove', handleMove); // Listen on window for better dragging
+window.addEventListener('mouseup', handleEnd);   // Listen on window for better dragging
+canvas.addEventListener('mouseout', (e) => {
+    // Only stop if we actually left the interaction zone, handled by handleEnd on window
+});
 
 canvas.addEventListener('touchstart', handleStart);
 canvas.addEventListener('touchmove', handleMove);
@@ -240,22 +254,15 @@ valueSlider.addEventListener('input', () => {
 
 copyButton.textContent = 'Copy for Nuke';
 copyButton.addEventListener('click', () => {
-    const rgbText = rgbLabel ? rgbLabel.textContent : '';
+    const rgbText = rgbLabel.textContent;
     const rgbValues = rgbText.match(/\d+\.\d+/g);
 
     if (rgbValues && rgbValues.length === 3) {
         // The values are already in ACES space, just format them
         const formattedValues = `${rgbValues.join(' ')} 1`;
-
         navigator.clipboard.writeText(formattedValues).then(() => {
-            alert('Color values copied to clipboard!');
-        }).catch(err => {
-            console.error('Failed to copy: ', err);
-            alert('Failed to copy to clipboard. Please copy the values manually.');
+            alert('ACES Color values copied!');
         });
-    } else {
-        console.error('Failed to extract color values');
-        alert('Failed to extract color values. Please try again.');
     }
 });
 
@@ -266,19 +273,19 @@ function saveColor() {
         rgb: colorDisplay.style.backgroundColor,
         hex: document.getElementById('hexInput').value,
         hsv: document.getElementById('hsvLabel').textContent.split(': ')[1],
+        aces: rgbLabel.textContent,
         x: currentX,
         y: currentY
     };
     if (!savedColors.some(color => color.rgb === currentColor.rgb)) {
         savedColors.push(currentColor);
+        localStorage.setItem('savedColors', JSON.stringify(savedColors));
         updateSavedColorsDisplay();
     }
 }
 
 function updateSavedColorsDisplay() {
     savedColorsContainer.innerHTML = '';
-
-    // Add clear button if there are saved colors
     if (savedColors.length > 0) {
         const clearButton = document.createElement('button');
         clearButton.id = 'clearSavedColors';
@@ -287,7 +294,7 @@ function updateSavedColorsDisplay() {
         savedColorsContainer.appendChild(clearButton);
     }
 
-    savedColors.forEach((color, index) => {
+    savedColors.forEach((color) => {
         const colorElement = document.createElement('div');
         colorElement.className = 'saved-color';
         colorElement.style.backgroundColor = color.rgb;
@@ -295,23 +302,24 @@ function updateSavedColorsDisplay() {
         savedColorsContainer.appendChild(colorElement);
     });
 
-    // Calculate and set the height of the savedColors container
-    const rows = Math.ceil(savedColors.length / 4); // Assuming 4 colors per row
-    const height = Math.max(60, rows * 50); // 50px per row, minimum 60px
-    savedColorsContainer.style.height = `${height}px`;
+    const rows = Math.ceil(savedColors.length / 4);
+    savedColorsContainer.style.height = `${Math.max(60, rows * 50)}px`;
 }
 
 function clearSavedColors() {
-    savedColors = [];
-    updateSavedColorsDisplay();
+    if (confirm('Clear all saved colors?')) {
+        savedColors = [];
+        localStorage.removeItem('savedColors');
+        updateSavedColorsDisplay();
+    }
 }
 
 function revertToColor(color) {
     // Update color display
     colorDisplay.style.backgroundColor = color.rgb;
 
-    // Update labels
-    updateLabel(rgbLabel, `RGB (0-1): ${color.rgb.match(/\d+/g).map(v => (parseInt(v) / 255).toFixed(3)).join(', ')}`);
+    // Use stored labels if they exist, or reconstruct
+    updateLabel(rgbLabel, color.aces || `ACES RGB (0-1): ${color.rgb.match(/\d+/g).map(v => (parseInt(v) / 255).toFixed(3)).join(', ')}`);
     updateLabel(document.getElementById('hexLabel'), `HEX: <input type="text" id="hexInput" value="${color.hex}" />`);
     updateLabel(document.getElementById('hsvLabel'), `HSV: ${color.hsv}`);
 
@@ -330,16 +338,11 @@ function revertToColor(color) {
 }
 
 function rgbToHsv(r, g, b) {
-    r /= 255;
-    g /= 255;
-    b /= 255;
-    const max = Math.max(r, g, b);
-    const min = Math.min(r, g, b);
+    r /= 255; g /= 255; b /= 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
     let h, s, v = max;
-
     const d = max - min;
     s = max === 0 ? 0 : d / max;
-
     if (max === min) {
         h = 0;
     } else {
@@ -350,7 +353,6 @@ function rgbToHsv(r, g, b) {
         }
         h /= 6;
     }
-
     return [h, s, v];
 }
 
@@ -358,19 +360,12 @@ function getColorWheelPosition(r, g, b) {
     const [h, s, v] = rgbToHsv(r, g, b);
     const radius = canvas.width / 2;
     const angle = h * 2 * Math.PI;
-    const x = radius + s * radius * Math.cos(angle);
-    const y = radius + s * radius * Math.sin(angle);
-    return [x, y];
+    return [radius + s * radius * Math.cos(angle), radius + s * radius * Math.sin(angle)];
 }
 
-// Add this new function
 function hexToRgb(hex) {
     const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-    return result ? {
-        r: parseInt(result[1], 16),
-        g: parseInt(result[2], 16),
-        b: parseInt(result[3], 16)
-    } : null;
+    return result ? { r: parseInt(result[1], 16), g: parseInt(result[2], 16), b: parseInt(result[3], 16) } : null;
 }
 
 // Modify the updateFromHex function
@@ -388,6 +383,7 @@ function updateFromHex(hex) {
         const acesR = rgb.r / 255;
         const acesG = rgb.g / 255;
         const acesB = rgb.b / 255;
+
         updateLabel(rgbLabel, `ACES RGB (0-1): (${acesR.toFixed(3)}, ${acesG.toFixed(3)}, ${acesB.toFixed(3)})`);
         updateLabel(document.getElementById('hexLabel'), `HEX: <input type="text" id="hexInput" value="${hex}" />`);
         updateLabel(document.getElementById('hsvLabel'), `HSV: (${Math.round(h * 360)}°, ${Math.round(s * 100)}%, ${Math.round(v * 100)}%)`);
@@ -403,3 +399,4 @@ function updateFromHex(hex) {
 
 window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
+updateSavedColorsDisplay();
