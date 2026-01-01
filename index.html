@@ -52,7 +52,7 @@
 
             <section id="colorInfo">
                 <div class="display-container">
-                    <div id="colorDisplay"></div>
+                    <div id="colorDisplay" draggable="true" title="Drag to Save Palette"></div>
                 </div>
                 <div class="info-card">
                     <div class="data-item">
@@ -68,6 +68,7 @@
                         <div id="hsvLabel" class="value mono">0°, 0%, 0%</div>
                     </div>
                 </div>
+                <div id="harmonies" class="harmonies-container"></div>
             </section>
 
             <div class="actions">
@@ -78,6 +79,16 @@
             <section class="saved-section">
                 <h3>Saved Palettes</h3>
                 <div id="savedColors"></div>
+                <div id="trashZone" class="trash-zone">
+                    <svg class="trash-svg" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path class="trash-lid" d="M7 7V5C7 4.44772 7.44772 4 8 4H16C16.5523 4 17 4.44772 17 5V7"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                        <path class="trash-base"
+                            d="M4 7H20M10 11V17M14 11V17M5 7L6 19C6 20.1046 6.89543 21 8 21H16C17.1046 21 18 20.1046 18 19L19 7"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                    <span>Remove Color</span>
+                </div>
                 <div id="clearButtonContainer" class="clear-footer"></div>
             </section>
         </main>

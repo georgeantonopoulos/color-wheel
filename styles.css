@@ -246,6 +246,42 @@ select:hover {
     gap: 8px;
 }
 
+.harmonies-container {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-top: 4px;
+}
+
+.harmony-item {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    align-items: center;
+}
+
+.harmony-swatch {
+    width: 100%;
+    height: 40px;
+    border-radius: 10px;
+    border: 1px solid var(--border-color);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+    cursor: pointer;
+    transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.harmony-swatch:hover {
+    transform: scale(1.05);
+}
+
+.harmony-label {
+    font-size: 9px;
+    font-weight: 700;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
 .data-item {
     padding: 8px 12px;
     display: flex;
@@ -403,6 +439,75 @@ h3 {
     transform: scale(1.1);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
     z-index: 10;
+}
+
+#savedColors.drag-over {
+    background: rgba(0, 122, 255, 0.15);
+    border-color: var(--accent-color);
+    box-shadow: inset 0 0 15px rgba(0, 122, 255, 0.2);
+}
+
+.trash-zone {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    background: rgba(255, 59, 48, 0.05);
+    border: 1px dashed rgba(255, 59, 48, 0.2);
+    border-radius: 12px;
+    padding: 12px;
+    margin-top: 12px;
+    color: #ff3b30;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    opacity: 0;
+    transform: translateY(10px);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    pointer-events: none;
+}
+
+.trash-zone.visible {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: all;
+}
+
+.trash-zone.drag-over {
+    background: rgba(255, 59, 48, 0.15);
+    border-style: solid;
+    border-color: #ff3b30;
+    box-shadow: 0 0 15px rgba(255, 59, 48, 0.2);
+    transform: scale(1.02);
+}
+
+.trash-svg {
+    width: 18px;
+    height: 18px;
+}
+
+.trash-lid {
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transform-origin: 17px 7px;
+}
+
+.trash-zone.visible .trash-lid {
+    transform: rotate(-35deg) translateY(-2px);
+}
+
+.trash-zone.drag-over .trash-lid {
+    transform: rotate(-60deg) translateY(-4px);
+}
+
+.harmony-swatch,
+#colorDisplay {
+    cursor: grab;
+}
+
+.harmony-swatch:active,
+#colorDisplay:active {
+    cursor: grabbing;
 }
 
 .saved-section {

@@ -12,6 +12,8 @@ const colorSpaceSelect = document.getElementById('colorSpace');
 const resetWheelButton = document.getElementById('resetWheel');
 const dropHint = document.getElementById('dropHint');
 const clearButtonContainer = document.getElementById('clearButtonContainer');
+const harmoniesContainer = document.getElementById('harmonies');
+const trashZone = document.getElementById('trashZone');
 
 const matrices = {
     aces_ap1: {
@@ -51,6 +53,7 @@ const matrices = {
 let savedColors = JSON.parse(localStorage.getItem('savedColors')) || [];
 
 let currentX, currentY;
+let currentHue, currentSaturation;
 let isDragging = false;
 let isImageLoaded = false;
 let loadedImage = null;
@@ -127,29 +130,114 @@ function drawColorWheel() {
     }
 
     if (currentX !== undefined && currentY !== undefined) {
-        drawIndicator(currentX, currentY);
+        drawAllIndicators();
     }
 }
 
-function drawIndicator(x, y) {
-    const radius = 8;
+function drawAllIndicators() {
+    const size = canvas.width;
+    const centerX = size / 2;
+    const centerY = size / 2;
+    const wheelRadius = size / 2;
 
-    function drawAntiAliasedCircle(centerX, centerY, radius, strokeStyle, lineWidth) {
-        for (let dy = -radius - 2; dy <= radius + 2; dy++) {
-            for (let dx = -radius - 2; dx <= radius + 2; dx++) {
-                const distanceSquared = dx * dx + dy * dy;
-                if (distanceSquared > (radius - lineWidth) * (radius - lineWidth) && distanceSquared < (radius + lineWidth) * (radius + lineWidth)) {
-                    const distance = Math.sqrt(distanceSquared);
-                    const alpha = Math.max(0, Math.min(1, lineWidth + 0.5 - Math.abs(distance - radius)));
-                    ctx.fillStyle = `rgba(${strokeStyle}, ${alpha})`;
-                    ctx.fillRect(centerX + dx, centerY + dy, 1, 1);
-                }
-            }
-        }
+    const harmonies = [
+        (currentHue + 0.5) % 1,
+        (currentHue + 0.333) % 1,
+        (currentHue + 0.666) % 1
+    ];
+
+    // Helper to get coordinates from H/S
+    const getCoords = (h, s) => {
+        const angle = h * 2 * Math.PI - Math.PI;
+        return {
+            x: centerX + s * wheelRadius * Math.cos(angle),
+            y: centerY + s * wheelRadius * Math.sin(angle)
+        };
+    };
+
+    const primaryPos = { x: currentX, y: currentY };
+    const harmonyPositions = harmonies.map(h => getCoords(h, currentSaturation));
+
+    // 1. Draw Harmony Lines (Technical Guides)
+    ctx.setLineDash([4, 4]);
+    ctx.lineWidth = 1;
+
+    harmonyPositions.forEach(pos => {
+        ctx.beginPath();
+        ctx.moveTo(centerX, centerY);
+        ctx.lineTo(pos.x, pos.y);
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(primaryPos.x, primaryPos.y);
+        ctx.lineTo(pos.x, pos.y);
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+        ctx.stroke();
+    });
+
+    // Dash from center to primary
+    ctx.beginPath();
+    ctx.moveTo(centerX, centerY);
+    ctx.lineTo(primaryPos.x, primaryPos.y);
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // 2. Draw Harmony Indicators (Faint)
+    harmonyPositions.forEach(pos => {
+        drawIndicator(pos.x, pos.y, 4, false);
+    });
+
+    // 3. Draw Primary Indicator (The "Magnifier")
+    drawIndicator(primaryPos.x, primaryPos.y, 8, true);
+}
+
+function drawIndicator(x, y, radius, isPrimary) {
+    ctx.save();
+
+    if (isPrimary) {
+        // High-end Magnifier Look
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+
+        ctx.beginPath();
+        ctx.arc(x, y, radius + 2, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.4)';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.arc(x, y, radius, 0, Math.PI * 2);
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Inner hair cross
+        ctx.beginPath();
+        ctx.moveTo(x - 3, y);
+        ctx.lineTo(x + 3, y);
+        ctx.moveTo(x, y - 3);
+        ctx.lineTo(x, y + 3);
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+    } else {
+        // Subtle Harmony Dot
+        ctx.beginPath();
+        ctx.arc(x, y, radius, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.arc(x, y, radius - 1, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
     }
 
-    drawAntiAliasedCircle(x, y, radius + 1, '128, 128, 128', 1);
-    drawAntiAliasedCircle(x, y, radius, '255, 255, 255', 1);
+    ctx.restore();
 }
 
 function hsvToRgbLin(h, s, v) {
@@ -256,9 +344,10 @@ function updateColor(x, y) {
         }
     }
 
-    colorDisplay.style.backgroundColor = `rgb(${sR}, ${sG}, ${sB})`;
+    currentHue = hue;
+    currentSaturation = saturation;
 
-    const spaceLabel = colorSpaceSelect.options[colorSpaceSelect.selectedIndex].text;
+    colorDisplay.style.backgroundColor = `rgb(${sR}, ${sG}, ${sB})`;
 
     // Update labels with cleaned up values
     rgbLabel.textContent = `${outR.toFixed(3)}, ${outG.toFixed(3)}, ${outB.toFixed(3)}`;
@@ -270,6 +359,65 @@ function updateColor(x, y) {
     if (hexInput) {
         hexInput.addEventListener('change', (e) => updateFromHex(e.target.value));
         hexInput.addEventListener('blur', (e) => updateFromHex(e.target.value));
+    }
+
+    // Harmonies logic
+    if (harmoniesContainer) {
+        const compHue = (hue + 0.5) % 1;
+        const tri1Hue = (hue + 0.333) % 1;
+        const tri2Hue = (hue + 0.666) % 1;
+
+        const harmonyHues = [
+            { label: 'Comp', hue: compHue },
+            { label: 'Tri 1', hue: tri1Hue },
+            { label: 'Tri 2', hue: tri2Hue }
+        ];
+
+        harmoniesContainer.innerHTML = '';
+        harmonyHues.forEach(harmony => {
+            // Current saturation and value are used for harmony swatches
+            const [rTarget, gTarget, bTarget] = hsvToRgbLin(harmony.hue, saturation, value);
+
+            // Convert to linear sRGB then sRGB for display
+            const selectedSpace = colorSpaceSelect.value;
+            const toLinMatrix = matrices[selectedSpace].toLinearSRGB;
+            const [rLin, gLin, bLin] = applyMatrix([rTarget, gTarget, bTarget], toLinMatrix);
+
+            const hR = Math.max(0, Math.min(255, Math.round(linearToSRGB(rLin) * 255)));
+            const hG = Math.max(0, Math.min(255, Math.round(linearToSRGB(gLin) * 255)));
+            const hB = Math.max(0, Math.min(255, Math.round(linearToSRGB(bLin) * 255)));
+
+            const item = document.createElement('div');
+            item.className = 'harmony-item';
+
+            const swatch = document.createElement('div');
+            swatch.className = 'harmony-swatch';
+            swatch.style.backgroundColor = `rgb(${hR}, ${hG}, ${hB})`;
+
+            // Drag and Drop for Harmony Swatch
+            swatch.draggable = true;
+            const harmonyData = {
+                rgb: `rgb(${hR}, ${hG}, ${hB})`,
+                hex: rgbToHex(hR, hG, hB),
+                hsv: `${Math.round(harmony.hue * 360)}°, ${Math.round(saturation * 100)}%, ${Math.round(value * 100)}%`,
+                rgbOutput: `${rTarget.toFixed(3)}, ${gTarget.toFixed(3)}, ${bTarget.toFixed(3)}`,
+                x: (canvas.width / 2) + Math.cos(harmony.hue * 2 * Math.PI - Math.PI) * saturation * (canvas.width / 2),
+                y: (canvas.height / 2) + Math.sin(harmony.hue * 2 * Math.PI - Math.PI) * saturation * (canvas.height / 2)
+            };
+            swatch.addEventListener('dragstart', (e) => {
+                e.dataTransfer.setData('application/x-color-pick', JSON.stringify(harmonyData));
+                e.dataTransfer.effectAllowed = 'copy';
+            });
+            swatch.addEventListener('dragend', handleDragEnd);
+
+            const label = document.createElement('span');
+            label.className = 'harmony-label';
+            label.textContent = harmony.label;
+
+            item.appendChild(swatch);
+            item.appendChild(label);
+            harmoniesContainer.appendChild(item);
+        });
     }
 
     drawColorWheel();
@@ -402,13 +550,13 @@ resetWheelButton.addEventListener('click', () => {
     drawColorWheel();
 });
 
-saveButton.addEventListener('click', saveColor);
+saveButton.addEventListener('click', () => saveColor());
 
-function saveColor() {
-    const currentColor = {
+function saveColor(colorData) {
+    const currentColor = colorData || {
         rgb: colorDisplay.style.backgroundColor,
         hex: document.getElementById('hexInput').value,
-        hsv: document.getElementById('hsvLabel').textContent.split(': ')[1],
+        hsv: hsvLabel.textContent,
         rgbOutput: rgbLabel.textContent,
         x: currentX,
         y: currentY
@@ -419,6 +567,79 @@ function saveColor() {
         updateSavedColorsDisplay();
     }
 }
+
+// Drag and Drop Handlers
+function handleDragStart(e, colorData) {
+    e.dataTransfer.setData('application/x-color-pick', JSON.stringify(colorData));
+    e.dataTransfer.effectAllowed = 'copy';
+}
+
+function handleDragEnd(e) {
+    savedColorsContainer.classList.remove('drag-over');
+}
+
+colorDisplay.addEventListener('dragstart', (e) => {
+    const colorData = {
+        rgb: colorDisplay.style.backgroundColor,
+        hex: document.getElementById('hexInput').value,
+        hsv: hsvLabel.textContent,
+        rgbOutput: rgbLabel.textContent,
+        x: currentX,
+        y: currentY
+    };
+    e.dataTransfer.setData('application/x-color-pick', JSON.stringify(colorData));
+    e.dataTransfer.effectAllowed = 'copy';
+});
+
+savedColorsContainer.addEventListener('dragover', (e) => {
+    if (e.dataTransfer.types.includes('application/x-color-pick')) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+        savedColorsContainer.classList.add('drag-over');
+    }
+});
+
+savedColorsContainer.addEventListener('dragleave', () => {
+    savedColorsContainer.classList.remove('drag-over');
+});
+
+savedColorsContainer.addEventListener('drop', (e) => {
+    e.preventDefault();
+    savedColorsContainer.classList.remove('drag-over');
+    const pickData = e.dataTransfer.getData('application/x-color-pick');
+    if (pickData) {
+        try {
+            const data = JSON.parse(pickData);
+            saveColor(data);
+        } catch (err) {
+            console.error('Failed to parse dropped color data', err);
+        }
+    }
+});
+
+// Trash Zone Handlers
+trashZone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    trashZone.classList.add('drag-over');
+});
+
+trashZone.addEventListener('dragleave', () => {
+    trashZone.classList.remove('drag-over');
+});
+
+trashZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    trashZone.classList.remove('drag-over');
+    trashZone.classList.remove('visible');
+
+    const index = e.dataTransfer.getData('application/x-color-index');
+    if (index !== "") {
+        savedColors.splice(parseInt(index), 1);
+        localStorage.setItem('savedColors', JSON.stringify(savedColors));
+        updateSavedColorsDisplay();
+    }
+});
 
 function updateSavedColorsDisplay() {
     savedColorsContainer.innerHTML = '';
@@ -432,11 +653,25 @@ function updateSavedColorsDisplay() {
         clearButtonContainer.appendChild(clearButton);
     }
 
-    savedColors.forEach((color) => {
+    savedColors.forEach((color, index) => {
         const colorElement = document.createElement('div');
         colorElement.className = 'saved-color';
         colorElement.style.backgroundColor = color.rgb;
+        colorElement.draggable = true;
+
         colorElement.addEventListener('click', () => revertToColor(color));
+
+        colorElement.addEventListener('dragstart', (e) => {
+            e.dataTransfer.setData('application/x-color-index', index);
+            e.dataTransfer.effectAllowed = 'move';
+            trashZone.classList.add('visible');
+        });
+
+        colorElement.addEventListener('dragend', () => {
+            trashZone.classList.remove('visible');
+            trashZone.classList.remove('drag-over');
+        });
+
         savedColorsContainer.appendChild(colorElement);
     });
 
@@ -478,6 +713,13 @@ function revertToColor(color) {
     currentX = color.x;
     currentY = color.y;
 
+    const rgb = hexToRgb(color.hex);
+    if (rgb) {
+        const [h, s] = rgbToHsv(rgb.r, rgb.g, rgb.b);
+        currentHue = h;
+        currentSaturation = s;
+    }
+
     // Redraw the color wheel with the updated position
     drawColorWheel();
 }
@@ -504,8 +746,10 @@ function rgbToHsv(r, g, b) {
 function getColorWheelPosition(r, g, b) {
     const [h, s, v] = rgbToHsv(r, g, b);
     const radius = canvas.width / 2;
-    const angle = h * 2 * Math.PI;
-    return [radius + s * radius * Math.cos(angle), radius + s * radius * Math.sin(angle)];
+    const centerX = canvas.width / 2;
+    const centerY = canvas.height / 2;
+    const angle = h * 2 * Math.PI - Math.PI;
+    return [centerX + s * radius * Math.cos(angle), centerY + s * radius * Math.sin(angle)];
 }
 
 function hexToRgb(hex) {
@@ -551,6 +795,8 @@ function updateFromHex(hex) {
         // Update color wheel position
         currentX = x;
         currentY = y;
+        currentHue = h;
+        currentSaturation = s;
 
         // Redraw the color wheel with the updated position
         drawColorWheel();

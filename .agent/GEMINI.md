@@ -97,7 +97,7 @@ On drop, render image to canvas.
 
 Update updateColor to sample pixel data (ctx.getImageData) if an image is loaded, bypassing the math-based hue calculation.
 
-Task 6: Color Harmonies
+Task 6: Color Harmonies [COMPLETED]
 
 Context: Helper for lighting setups.
 
