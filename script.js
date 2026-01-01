@@ -6,6 +6,43 @@ const copyButton = document.getElementById('copyButton');
 const saveButton = document.getElementById('saveButton');
 const savedColorsContainer = document.getElementById('savedColors');
 const valueSlider = document.getElementById('valueSlider');
+const colorSpaceSelect = document.getElementById('colorSpace');
+
+const matrices = {
+    aces_ap1: {
+        toTarget: [
+            [0.61311, 0.33955, 0.04734],
+            [0.07015, 0.91635, 0.01350],
+            [0.02059, 0.10957, 0.86984]
+        ],
+        toLinearSRGB: [
+            [1.70505, -0.62423, -0.08082],
+            [-0.12977, 1.13847, -0.00870],
+            [-0.02425, -0.12461, 1.14886]
+        ]
+    },
+    aces_cg: { // Same as AP1 primaries
+        toTarget: [
+            [0.61311, 0.33955, 0.04734],
+            [0.07015, 0.91635, 0.01350],
+            [0.02059, 0.10957, 0.86984]
+        ],
+        toLinearSRGB: [
+            [1.70505, -0.62423, -0.08082],
+            [-0.12977, 1.13847, -0.00870],
+            [-0.02425, -0.12461, 1.14886]
+        ]
+    },
+    linear_srgb: {
+        toTarget: [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
+        toLinearSRGB: [[1, 0, 0], [0, 1, 0], [0, 0, 1]]
+    },
+    rec_709: {
+        toTarget: [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
+        toLinearSRGB: [[1, 0, 0], [0, 1, 0], [0, 0, 1]]
+    }
+};
+
 let savedColors = JSON.parse(localStorage.getItem('savedColors')) || [];
 
 let currentX, currentY;
@@ -41,13 +78,18 @@ function drawColorWheel() {
                 const hue = (Math.atan2(dy, dx) + Math.PI) / (2 * Math.PI);
                 const saturation = distance / radius;
 
-                // hsvToRgb returns ACES AP1 values (0-255)
-                const [acesR255, acesG255, acesB255] = hsvToRgb(hue, saturation, value);
+                // Treat HSV as values in the SELECTED space
+                const [rTarget, gTarget, bTarget] = hsvToRgbLin(hue, saturation, value);
 
-                // Convert ACES values to sRGB for consistent display brightness
-                const sR = Math.max(0, Math.min(255, Math.round(ACESToSRGB(acesR255 / 255) * 255)));
-                const sG = Math.max(0, Math.min(255, Math.round(ACESToSRGB(acesG255 / 255) * 255)));
-                const sB = Math.max(0, Math.min(255, Math.round(ACESToSRGB(acesB255 / 255) * 255)));
+                // Convert TARGET space to linear sRGB for display
+                const selectedSpace = colorSpaceSelect.value;
+                const matrix = matrices[selectedSpace].toLinearSRGB;
+                const [rLin, gLin, bLin] = applyMatrix([rTarget, gTarget, bTarget], matrix);
+
+                // Convert linear sRGB to sRGB for consistent display brightness
+                const sR = Math.max(0, Math.min(255, Math.round(linearToSRGB(rLin) * 255)));
+                const sG = Math.max(0, Math.min(255, Math.round(linearToSRGB(gLin) * 255)));
+                const sB = Math.max(0, Math.min(255, Math.round(linearToSRGB(bLin) * 255)));
 
                 const alpha = distance > radius - 1 ? (1 - (distance - (radius - 1))) * 255 : 255;
 
@@ -88,7 +130,7 @@ function drawIndicator(x, y) {
     drawAntiAliasedCircle(x, y, radius, '255, 255, 255', 1);
 }
 
-function hsvToRgb(h, s, v) {
+function hsvToRgbLin(h, s, v) {
     let r, g, b;
     const i = Math.floor(h * 6);
     const f = h * 6 - i;
@@ -105,50 +147,28 @@ function hsvToRgb(h, s, v) {
         case 5: r = v, g = p, b = q; break;
     }
 
-    // Convert to ACES AP1 primaries
+    // Return linear values (0-1)
+    return [r, g, b];
+}
+
+function applyMatrix(color, matrix) {
+    const [r, g, b] = color;
     return [
-        Math.round(sRGBToACES(r) * 255),
-        Math.round(sRGBToACES(g) * 255),
-        Math.round(sRGBToACES(b) * 255)
+        r * matrix[0][0] + g * matrix[0][1] + b * matrix[0][2],
+        r * matrix[1][0] + g * matrix[1][1] + b * matrix[1][2],
+        r * matrix[2][0] + g * matrix[2][1] + b * matrix[2][2]
     ];
 }
 
-// Add these new functions for ACES conversion
-function sRGBToACES(c) {
-    // First, convert sRGB to linear sRGB
-    if (c <= 0.04045) {
-        c = c / 12.92;
-    } else {
-        c = Math.pow((c + 0.055) / 1.055, 2.4);
-    }
-
-    // Then, convert linear sRGB to ACES AP1
-    // This matrix multiplication is simplified for a single channel.
-    // For full matrix, it would be:
-    // R_ACES = 0.6131 * R_lin_sRGB + 0.3396 * G_lin_sRGB + 0.0473 * B_lin_sRGB
-    // G_ACES = 0.0763 * R_lin_sRGB + 0.8970 * G_lin_sRGB + 0.0267 * B_lin_sRGB
-    // B_ACES = 0.0000 * R_lin_sRGB + 0.0000 * G_lin_sRGB + 1.0000 * B_lin_sRGB
-    // The current implementation `0.6131 * c + 0.3396 * c - 0.0527 * c` is incorrect for a single channel conversion.
-    // Assuming the intent was to apply a single channel transformation, a more appropriate (though still simplified)
-    // approach might be needed, or the hsvToRgb should return linear sRGB and then a full matrix conversion.
-    // For now, I'm preserving the user's provided formula for this function.
-    return 0.6131 * c + 0.3396 * c - 0.0527 * c;
+function sRGBToLinear(c) {
+    return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
 }
 
-function ACESToSRGB(c) {
-    // First, convert ACES AP1 to linear sRGB
-    // Similar to sRGBToACES, this single channel conversion `1.7050 * c - 0.6242 * c - 0.0808 * c` is a simplification
-    // of a matrix inversion and might not be accurate for full color space conversion.
-    // Preserving the user's provided formula.
-    c = 1.7050 * c - 0.6242 * c - 0.0808 * c;
-
-    // Then, convert linear sRGB to sRGB
-    if (c <= 0.0031308) {
-        return c * 12.92;
-    } else {
-        return 1.055 * Math.pow(c, 1 / 2.4) - 0.055;
-    }
+function linearToSRGB(c) {
+    return c <= 0.0031308 ? c * 12.92 : 1.055 * Math.pow(c, 1 / 2.4) - 0.055;
 }
+
+// Old conversion functions removed in favor of applyMatrix
 
 function rgbToHex(r, g, b) {
     // Ensure r, g, b are within 0-255 range before converting to hex
@@ -173,15 +193,25 @@ function updateColor(x, y) {
         const hue = (Math.atan2(dy, dx) + Math.PI) / (2 * Math.PI);
         const saturation = distance / radius;
         const value = parseFloat(valueSlider.value);
-        const [r, g, b] = hsvToRgb(hue, saturation, value);
 
-        const acesR = r / 255;
-        const acesG = g / 255;
-        const acesB = b / 255;
+        // Treat picked HSV as values in the TARGET color space
+        const [outR, outG, outB] = hsvToRgbLin(hue, saturation, value);
 
-        colorDisplay.style.backgroundColor = `rgb(${Math.round(ACESToSRGB(acesR) * 255)}, ${Math.round(ACESToSRGB(acesG) * 255)}, ${Math.round(ACESToSRGB(acesB) * 255)})`;
-        updateLabel(rgbLabel, `ACES RGB (0-1): (${acesR.toFixed(3)}, ${acesG.toFixed(3)}, ${acesB.toFixed(3)})`);
-        updateLabel(document.getElementById('hexLabel'), `HEX: <input type="text" id="hexInput" value="${rgbToHex(r, g, b)}" />`);
+        // Convert TARGET space to linear sRGB for monitor display
+        const selectedSpace = colorSpaceSelect.value;
+        const toLinMatrix = matrices[selectedSpace].toLinearSRGB;
+        const [rLin, gLin, bLin] = applyMatrix([outR, outG, outB], toLinMatrix);
+
+        // Display color is always sRGB-mapped for the monitor
+        const sR = Math.max(0, Math.min(255, Math.round(linearToSRGB(rLin) * 255)));
+        const sG = Math.max(0, Math.min(255, Math.round(linearToSRGB(gLin) * 255)));
+        const sB = Math.max(0, Math.min(255, Math.round(linearToSRGB(bLin) * 255)));
+
+        colorDisplay.style.backgroundColor = `rgb(${sR}, ${sG}, ${sB})`;
+
+        const spaceLabel = colorSpaceSelect.options[colorSpaceSelect.selectedIndex].text;
+        updateLabel(rgbLabel, `${spaceLabel} RGB (0-1): (${outR.toFixed(3)}, ${outG.toFixed(3)}, ${outB.toFixed(3)})`);
+        updateLabel(document.getElementById('hexLabel'), `HEX: <input type="text" id="hexInput" value="${rgbToHex(sR, sG, sB)}" />`);
         updateLabel(document.getElementById('hsvLabel'), `HSV: (${Math.round(hue * 360)}°, ${Math.round(saturation * 100)}%, ${Math.round(value * 100)}%)`);
 
         drawColorWheel();
@@ -209,8 +239,8 @@ function handleStart(e) {
 }
 
 function handleMove(e) {
-    e.preventDefault();
     if (isDragging) {
+        e.preventDefault();
         const pos = getEventPosition(e);
         updateColor(pos.x, pos.y);
     }
@@ -244,6 +274,13 @@ canvas.addEventListener('touchmove', handleMove);
 canvas.addEventListener('touchend', handleEnd);
 canvas.addEventListener('touchcancel', handleEnd);
 
+colorSpaceSelect.addEventListener('change', () => {
+    drawColorWheel();
+    if (currentX !== undefined && currentY !== undefined) {
+        updateColor(currentX, currentY);
+    }
+});
+
 valueSlider.addEventListener('input', () => {
     if (currentX !== undefined && currentY !== undefined) {
         updateColor(currentX, currentY);
@@ -252,16 +289,17 @@ valueSlider.addEventListener('input', () => {
     }
 });
 
-copyButton.textContent = 'Copy for Nuke';
+copyButton.textContent = 'Copy Nuke Node';
 copyButton.addEventListener('click', () => {
     const rgbText = rgbLabel.textContent;
     const rgbValues = rgbText.match(/\d+\.\d+/g);
 
     if (rgbValues && rgbValues.length === 3) {
-        // The values are already in ACES space, just format them
-        const formattedValues = `${rgbValues.join(' ')} 1`;
-        navigator.clipboard.writeText(formattedValues).then(() => {
-            alert('ACES Color values copied!');
+        const [r, g, b] = rgbValues;
+        const nukeNode = `set cut_paste_input [stack 0]; version 13.0; Constant { inputs 0 color {${r} ${g} ${b} 1} name ColorWheel_Pick selected true xpos 0 ypos 0 }`;
+
+        navigator.clipboard.writeText(nukeNode).then(() => {
+            alert('Nuke Constant node copied!');
         });
     }
 });
@@ -273,7 +311,7 @@ function saveColor() {
         rgb: colorDisplay.style.backgroundColor,
         hex: document.getElementById('hexInput').value,
         hsv: document.getElementById('hsvLabel').textContent.split(': ')[1],
-        aces: rgbLabel.textContent,
+        rgbOutput: rgbLabel.textContent,
         x: currentX,
         y: currentY
     };
@@ -319,7 +357,7 @@ function revertToColor(color) {
     colorDisplay.style.backgroundColor = color.rgb;
 
     // Use stored labels if they exist, or reconstruct
-    updateLabel(rgbLabel, color.aces || `ACES RGB (0-1): ${color.rgb.match(/\d+/g).map(v => (parseInt(v) / 255).toFixed(3)).join(', ')}`);
+    updateLabel(rgbLabel, color.rgbOutput || color.aces || `RGB (0-1): ${color.rgb.match(/\d+/g).map(v => (parseInt(v) / 255).toFixed(3)).join(', ')}`);
     updateLabel(document.getElementById('hexLabel'), `HEX: <input type="text" id="hexInput" value="${color.hex}" />`);
     updateLabel(document.getElementById('hsvLabel'), `HSV: ${color.hsv}`);
 
@@ -380,11 +418,19 @@ function updateFromHex(hex) {
         valueSlider.value = v;
 
         // Update labels
-        const acesR = rgb.r / 255;
-        const acesG = rgb.g / 255;
-        const acesB = rgb.b / 255;
+        // HEX RGB is display sRGB. For output space, we need to convert sRGB -> Linear sRGB -> Target Space
+        const linR = sRGBToLinear(rgb.r / 255);
+        const linG = sRGBToLinear(rgb.g / 255);
+        const linB = sRGBToLinear(rgb.b / 255);
+        const linRgb = [linR, linG, linB];
 
-        updateLabel(rgbLabel, `ACES RGB (0-1): (${acesR.toFixed(3)}, ${acesG.toFixed(3)}, ${acesB.toFixed(3)})`);
+        const selectedSpace = colorSpaceSelect.value;
+        const toTargetMatrix = matrices[selectedSpace].toTarget;
+        const transformedRgb = applyMatrix(linRgb, toTargetMatrix);
+        const [outR, outG, outB] = transformedRgb;
+
+        const spaceLabel = colorSpaceSelect.options[colorSpaceSelect.selectedIndex].text;
+        updateLabel(rgbLabel, `${spaceLabel} RGB (0-1): (${outR.toFixed(3)}, ${outG.toFixed(3)}, ${outB.toFixed(3)})`);
         updateLabel(document.getElementById('hexLabel'), `HEX: <input type="text" id="hexInput" value="${hex}" />`);
         updateLabel(document.getElementById('hsvLabel'), `HSV: (${Math.round(h * 360)}°, ${Math.round(s * 100)}%, ${Math.round(v * 100)}%)`);
 
