@@ -14,7 +14,10 @@
 <body>
     <div class="container">
         <h1>Color Wheel</h1>
-        <canvas id="colorWheel" width="300" height="300"></canvas>
+        <div class="wheel-area">
+            <canvas id="colorWheel" width="300" height="300"></canvas>
+            <input type="range" id="valueSlider" min="0" max="1" step="0.01" value="1">
+        </div>
         <div id="colorInfo">
             <div id="colorDisplay"></div>
             <div id="rgbLabel">RGB (0-1): </div>

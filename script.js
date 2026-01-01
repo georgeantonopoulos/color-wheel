@@ -5,6 +5,7 @@ const rgbLabel = document.getElementById('rgbLabel');
 const copyButton = document.getElementById('copyButton');
 const saveButton = document.getElementById('saveButton');
 const savedColorsContainer = document.getElementById('savedColors');
+const valueSlider = document.getElementById('valueSlider');
 let savedColors = [];
 
 let currentX, currentY;
@@ -19,29 +20,49 @@ function resizeCanvas() {
 
 function drawColorWheel() {
     const size = canvas.width;
+    if (size === 0) return;
     const radius = size / 2;
     const centerX = size / 2;
     const centerY = size / 2;
 
-    ctx.clearRect(0, 0, size, size);
-    
+    const imageData = ctx.createImageData(size, size);
+    const data = imageData.data;
+    const value = parseFloat(valueSlider.value);
+
     for (let y = 0; y < size; y++) {
         for (let x = 0; x < size; x++) {
             const dx = x - centerX;
             const dy = y - centerY;
             const distance = Math.sqrt(dx * dx + dy * dy);
-            
+
+            const index = (y * size + x) * 4;
+
             if (distance <= radius) {
                 const hue = (Math.atan2(dy, dx) + Math.PI) / (2 * Math.PI);
                 const saturation = distance / radius;
-                const [r, g, b] = hsvToRgb(hue, saturation, 1);
-                
-                const alpha = distance > radius - 1 ? 1 - (distance - (radius - 1)) : 1;
-                ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${alpha})`;
-                ctx.fillRect(x, y, 1, 1);
+
+                // hsvToRgb returns ACES values (0-255)
+                const [acesR255, acesG255, acesB255] = hsvToRgb(hue, saturation, value);
+
+                // Convert ACES values to sRGB for consistent display brightness
+                const sR = Math.max(0, Math.min(255, Math.round(ACESToSRGB(acesR255 / 255) * 255)));
+                const sG = Math.max(0, Math.min(255, Math.round(ACESToSRGB(acesG255 / 255) * 255)));
+                const sB = Math.max(0, Math.min(255, Math.round(ACESToSRGB(acesB255 / 255) * 255)));
+
+                // Antialiasing for the edges
+                const alpha = distance > radius - 1 ? (1 - (distance - (radius - 1))) * 255 : 255;
+
+                data[index] = sR;
+                data[index + 1] = sG;
+                data[index + 2] = sB;
+                data[index + 3] = alpha;
+            } else {
+                data[index + 3] = 0; // Transparent
             }
         }
     }
+
+    ctx.putImageData(imageData, 0, 0);
 
     if (currentX !== undefined && currentY !== undefined) {
         drawIndicator(currentX, currentY);
@@ -50,11 +71,11 @@ function drawColorWheel() {
 
 function drawIndicator(x, y) {
     const radius = 8;
-    
+
     function drawAntiAliasedCircle(centerX, centerY, radius, strokeStyle, lineWidth) {
         const diameter = radius * 2;
         const radiusSquared = radius * radius;
-        
+
         for (let y = -radius - 2; y <= radius + 2; y++) {
             for (let x = -radius - 2; x <= radius + 2; x++) {
                 const distanceSquared = x * x + y * y;
@@ -105,7 +126,7 @@ function sRGBToACES(c) {
     } else {
         c = Math.pow((c + 0.055) / 1.055, 2.4);
     }
-    
+
     // Then, convert linear sRGB to ACES AP1
     return 0.6131 * c + 0.3396 * c - 0.0527 * c;
 }
@@ -113,12 +134,12 @@ function sRGBToACES(c) {
 function ACESToSRGB(c) {
     // First, convert ACES AP1 to linear sRGB
     c = 1.7050 * c - 0.6242 * c - 0.0808 * c;
-    
+
     // Then, convert linear sRGB to sRGB
     if (c <= 0.0031308) {
         return c * 12.92;
     } else {
-        return 1.055 * Math.pow(c, 1/2.4) - 0.055;
+        return 1.055 * Math.pow(c, 1 / 2.4) - 0.055;
     }
 }
 
@@ -134,23 +155,24 @@ function updateColor(x, y) {
     const dx = x - centerX;
     const dy = y - centerY;
     const distance = Math.sqrt(dx * dx + dy * dy);
-    
+
     if (distance <= radius) {
         currentX = x;
         currentY = y;
         const hue = (Math.atan2(dy, dx) + Math.PI) / (2 * Math.PI);
         const saturation = distance / radius;
-        const [r, g, b] = hsvToRgb(hue, saturation, 1);
-        
+        const value = parseFloat(valueSlider.value);
+        const [r, g, b] = hsvToRgb(hue, saturation, value);
+
         const acesR = r / 255;
         const acesG = g / 255;
         const acesB = b / 255;
-        
+
         colorDisplay.style.backgroundColor = `rgb(${Math.round(ACESToSRGB(acesR) * 255)}, ${Math.round(ACESToSRGB(acesG) * 255)}, ${Math.round(ACESToSRGB(acesB) * 255)})`;
         updateLabel(rgbLabel, `ACES RGB (0-1): (${acesR.toFixed(3)}, ${acesG.toFixed(3)}, ${acesB.toFixed(3)})`);
         updateLabel(document.getElementById('hexLabel'), `HEX: <input type="text" id="hexInput" value="${rgbToHex(r, g, b)}" />`);
-        updateLabel(document.getElementById('hsvLabel'), `HSV: (${Math.round(hue * 360)}°, ${Math.round(saturation * 100)}%, 100%)`);
-        
+        updateLabel(document.getElementById('hsvLabel'), `HSV: (${Math.round(hue * 360)}°, ${Math.round(saturation * 100)}%, ${Math.round(value * 100)}%)`);
+
         drawColorWheel();
     }
 }
@@ -208,15 +230,23 @@ canvas.addEventListener('touchmove', handleMove);
 canvas.addEventListener('touchend', handleEnd);
 canvas.addEventListener('touchcancel', handleEnd);
 
+valueSlider.addEventListener('input', () => {
+    if (currentX !== undefined && currentY !== undefined) {
+        updateColor(currentX, currentY);
+    } else {
+        drawColorWheel();
+    }
+});
+
 copyButton.textContent = 'Copy for Nuke';
 copyButton.addEventListener('click', () => {
     const rgbText = rgbLabel ? rgbLabel.textContent : '';
     const rgbValues = rgbText.match(/\d+\.\d+/g);
-    
+
     if (rgbValues && rgbValues.length === 3) {
         // The values are already in ACES space, just format them
         const formattedValues = `${rgbValues.join(' ')} 1`;
-        
+
         navigator.clipboard.writeText(formattedValues).then(() => {
             alert('Color values copied to clipboard!');
         }).catch(err => {
@@ -247,7 +277,7 @@ function saveColor() {
 
 function updateSavedColorsDisplay() {
     savedColorsContainer.innerHTML = '';
-    
+
     // Add clear button if there are saved colors
     if (savedColors.length > 0) {
         const clearButton = document.createElement('button');
@@ -256,7 +286,7 @@ function updateSavedColorsDisplay() {
         clearButton.addEventListener('click', clearSavedColors);
         savedColorsContainer.appendChild(clearButton);
     }
-    
+
     savedColors.forEach((color, index) => {
         const colorElement = document.createElement('div');
         colorElement.className = 'saved-color';
@@ -279,16 +309,22 @@ function clearSavedColors() {
 function revertToColor(color) {
     // Update color display
     colorDisplay.style.backgroundColor = color.rgb;
-    
+
     // Update labels
     updateLabel(rgbLabel, `RGB (0-1): ${color.rgb.match(/\d+/g).map(v => (parseInt(v) / 255).toFixed(3)).join(', ')}`);
     updateLabel(document.getElementById('hexLabel'), `HEX: <input type="text" id="hexInput" value="${color.hex}" />`);
     updateLabel(document.getElementById('hsvLabel'), `HSV: ${color.hsv}`);
-    
+
+    // Extract Value from HSV string (e.g., "(120°, 50%, 80%)")
+    const hsvMatch = color.hsv.match(/(\d+)%\)/);
+    if (hsvMatch) {
+        valueSlider.value = parseInt(hsvMatch[1]) / 100;
+    }
+
     // Update color wheel position
     currentX = color.x;
     currentY = color.y;
-    
+
     // Redraw the color wheel with the updated position
     drawColorWheel();
 }
@@ -343,10 +379,11 @@ function updateFromHex(hex) {
     if (rgb) {
         const [h, s, v] = rgbToHsv(rgb.r, rgb.g, rgb.b);
         const [x, y] = getColorWheelPosition(rgb.r, rgb.g, rgb.b);
-        
+
         // Update color display
         colorDisplay.style.backgroundColor = `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})`;
-        
+        valueSlider.value = v;
+
         // Update labels
         const acesR = rgb.r / 255;
         const acesG = rgb.g / 255;
@@ -354,11 +391,11 @@ function updateFromHex(hex) {
         updateLabel(rgbLabel, `ACES RGB (0-1): (${acesR.toFixed(3)}, ${acesG.toFixed(3)}, ${acesB.toFixed(3)})`);
         updateLabel(document.getElementById('hexLabel'), `HEX: <input type="text" id="hexInput" value="${hex}" />`);
         updateLabel(document.getElementById('hsvLabel'), `HSV: (${Math.round(h * 360)}°, ${Math.round(s * 100)}%, ${Math.round(v * 100)}%)`);
-        
+
         // Update color wheel position
         currentX = x;
         currentY = y;
-        
+
         // Redraw the color wheel with the updated position
         drawColorWheel();
     }
