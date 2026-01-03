@@ -330,18 +330,29 @@ async function initColorSystem() {
     try {
         console.log('Loading ACES LUT files...');
 
+        // Determine base path - works for both local file:// and http:// serving
+        const basePath = window.location.href.substring(0, window.location.href.lastIndexOf('/') + 1);
+        const spi3dUrl = basePath + 'luts/InvRRT.sRGB.Log2_48_nits_Shaper.spi3d';
+        const spi1dUrl = basePath + 'luts/Log2_48_nits_Shaper_to_linear.spi1d';
+
+        console.log('Fetching 3D LUT from:', spi3dUrl);
+        console.log('Fetching 1D LUT from:', spi1dUrl);
+
         const [spi3dText, spi1dText] = await Promise.all([
-            fetch('luts/InvRRT.sRGB.Log2_48_nits_Shaper.spi3d').then(r => {
-                if (!r.ok) throw new Error(`HTTP ${r.status} loading spi3d`);
+            fetch(spi3dUrl).then(r => {
+                if (!r.ok) throw new Error(`HTTP ${r.status} loading spi3d from ${spi3dUrl}`);
                 return r.text();
             }),
-            fetch('luts/Log2_48_nits_Shaper_to_linear.spi1d').then(r => {
-                if (!r.ok) throw new Error(`HTTP ${r.status} loading spi1d`);
+            fetch(spi1dUrl).then(r => {
+                if (!r.ok) throw new Error(`HTTP ${r.status} loading spi1d from ${spi1dUrl}`);
                 return r.text();
             })
         ]);
 
         console.log('Parsing LUT files...');
+        console.log('3D LUT size:', spi3dText.length, 'bytes');
+        console.log('1D LUT size:', spi1dText.length, 'bytes');
+
         lut3D = parseSpi3d(spi3dText);
         lut1D = parseSpi1d(spi1dText);
 
@@ -352,7 +363,8 @@ async function initColorSystem() {
     } catch (err) {
         lutError = err;
         lutReady = false;
-        console.warn('LUT load failed, using polynomial fallback:', err);
+        console.error('LUT load failed, using polynomial fallback:', err.message);
+        console.error('Full error:', err);
         return false;
     }
 }
