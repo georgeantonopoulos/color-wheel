@@ -212,10 +212,17 @@ header {
 }
 
 h1 {
-    font-size: 24px;
+    font-size: 26px;
     font-weight: 600;
     letter-spacing: -0.02em;
     margin-bottom: 4px;
+}
+
+.title-suffix {
+    font-size: 18px;
+    font-weight: 400;
+    color: var(--text-secondary);
+    margin-left: 4px;
 }
 
 .subtitle {

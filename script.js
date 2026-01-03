@@ -29,39 +29,78 @@ if ('documentPictureInPicture' in window) {
 }
 
 const matrices = {
-    aces_ap1: {
+    aces_cg: {
+        // Linear sRGB (D65) to ACEScg (AP1, Adapted to D60)
         toTarget: [
-            [0.61311, 0.33955, 0.04734],
-            [0.07015, 0.91635, 0.01350],
-            [0.02059, 0.10957, 0.86984]
+            [0.61309732, 0.33952346, 0.04737922],
+            [0.07019469, 0.91635395, 0.01345136],
+            [0.02061617, 0.10956977, 0.86981405]
         ],
+        // ACEScg (AP1, D60) to Linear sRGB (D65)
         toLinearSRGB: [
-            [1.70505, -0.62423, -0.08082],
-            [-0.12977, 1.13847, -0.00870],
-            [-0.02425, -0.12461, 1.14886]
-        ]
+            [1.70485868, -0.62171602, -0.08314265],
+            [-0.13007682, 1.14073577, -0.01065895],
+            [-0.02396407, -0.12897551, 1.15293958]
+        ],
+        type: 'aces',
+        isLog: false
     },
-    aces_cg: { // Same as AP1 primaries
+    aces_cct: {
+        // Uses same AP1 primaries as ACEScg
         toTarget: [
-            [0.61311, 0.33955, 0.04734],
-            [0.07015, 0.91635, 0.01350],
-            [0.02059, 0.10957, 0.86984]
+            [0.61309732, 0.33952346, 0.04737922],
+            [0.07019469, 0.91635395, 0.01345136],
+            [0.02061617, 0.10956977, 0.86981405]
         ],
-        toLinearSRGB: [
-            [1.70505, -0.62423, -0.08082],
-            [-0.12977, 1.13847, -0.00870],
-            [-0.02425, -0.12461, 1.14886]
-        ]
+        type: 'aces',
+        isLog: true,
+        logMode: 'cct'
+    },
+    aces_cc: {
+        toTarget: [
+            [0.61309732, 0.33952346, 0.04737922],
+            [0.07019469, 0.91635395, 0.01345136],
+            [0.02061617, 0.10956977, 0.86981405]
+        ],
+        type: 'aces',
+        isLog: true,
+        logMode: 'cc'
     },
     linear_srgb: {
         toTarget: [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
-        toLinearSRGB: [[1, 0, 0], [0, 1, 0], [0, 0, 1]]
+        type: 'linear'
     },
     rec_709: {
         toTarget: [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
-        toLinearSRGB: [[1, 0, 0], [0, 1, 0], [0, 0, 1]]
+        type: 'video',
+        isOETF: true
+    },
+    standard_srgb: {
+        toTarget: [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
+        type: 'display'
     }
 };
+
+// Update dropdown options
+function syncDropdown() {
+    const spaces = [
+        { value: 'aces_cg', text: 'ACEScg [Linear AP1]' },
+        { value: 'aces_cct', text: 'ACEScct [Log+Toe]' },
+        { value: 'aces_cc', text: 'ACEScc [Pure Log]' },
+        { value: 'linear_srgb', text: 'Linear sRGB' },
+        { value: 'rec_709', text: 'Rec.709 [Video]' },
+        { value: 'standard_srgb', text: 'Display sRGB (Standard)' }
+    ];
+
+    colorSpaceSelect.innerHTML = '';
+    spaces.forEach(s => {
+        const opt = document.createElement('option');
+        opt.value = s.value;
+        opt.textContent = s.text;
+        colorSpaceSelect.appendChild(opt);
+    });
+}
+syncDropdown();
 
 let savedColors = JSON.parse(localStorage.getItem('savedColors')) || [];
 
@@ -142,18 +181,16 @@ function drawColorWheel() {
                     const hue = (Math.atan2(dy, dx) + Math.PI) / (2 * Math.PI);
                     const saturation = distance / radius;
 
-                    // Treat HSV as values in the SELECTED space
-                    const [rTarget, gTarget, bTarget] = hsvToRgbLin(hue, saturation, value);
+                    // VISUAL REPRESENTATION IS ALWAYS DISPLAY sRGB
+                    // This creates a standard, non-clipped "Windows/Mac" style color picker.
+                    // We simply map Hue/Sat/Val -> RGB (0-1) -> RGB (0-255)
+                    const [rLin, gLin, bLin] = hsvToRgbLin(hue, saturation, value);
 
-                    // Convert TARGET space to linear sRGB for display
-                    const selectedSpace = colorSpaceSelect.value;
-                    const matrix = matrices[selectedSpace].toLinearSRGB;
-                    const [rLin, gLin, bLin] = applyMatrix([rTarget, gTarget, bTarget], matrix);
-
-                    // Convert linear sRGB to sRGB for consistent display brightness
-                    const sR = Math.max(0, Math.min(255, Math.round(linearToSRGB(rLin) * 255)));
-                    const sG = Math.max(0, Math.min(255, Math.round(linearToSRGB(gLin) * 255)));
-                    const sB = Math.max(0, Math.min(255, Math.round(linearToSRGB(bLin) * 255)));
+                    // Since hsvToRgbLin returns 0-1, and we are in Display Space for drawing,
+                    // we directly map this to 0-255.
+                    const sR = Math.min(255, Math.round(rLin * 255));
+                    const sG = Math.min(255, Math.round(gLin * 255));
+                    const sB = Math.min(255, Math.round(bLin * 255));
 
                     const alpha = distance > radius - 1 ? (1 - (distance - (radius - 1))) * 255 : 255;
 
@@ -327,7 +364,49 @@ function linearToSRGB(c) {
     return c <= 0.0031308 ? c * 12.92 : 1.055 * Math.pow(c, 1 / 2.4) - 0.055;
 }
 
+function linToACEScc(x) {
+    if (x <= 0) return -0.3584474886; // Log2 of small epsilon
+    return (Math.log2(x) + 9.72) / 17.52;
+}
+
+function acesccToLin(y) {
+    return Math.pow(2, y * 17.52 - 9.72);
+}
+
+function linToACEScct(x) {
+    if (x <= 0.0078125) {
+        return 10.5402377416545 * x + 0.0729055341958355;
+    } else {
+        return (Math.log2(x) + 9.72) / 17.52;
+    }
+}
+
+function acescctToLin(y) {
+    if (y <= 0.155251141552511) {
+        return (y - 0.0729055341958355) / 10.5402377416545;
+    } else {
+        return Math.pow(2, y * 17.52 - 9.72);
+    }
+}
+
+function linToRec709(x) {
+    if (x < 0.018) {
+        return 4.5 * x;
+    } else {
+        return 1.099 * Math.pow(x, 0.45) - 0.099;
+    }
+}
+
 // Old conversion functions removed in favor of applyMatrix
+
+function nukeInverseODT(c) {
+    // Polynomial approximation to match Nuke's ACES Output - sRGB (ACES 1.1)
+    // Maps Display 1.0 -> Scene ~2.06 (Peak White)
+    // Maps Display 0.48 (Visual) -> Scene 0.18 (Mid-grey)
+    // Formula derived to bridge the gap between sRGB highlights and Scene Linear
+    if (c <= 0) return 0;
+    return 0.853 * c + 1.207 * c * c;
+}
 
 function rgbToHex(r, g, b) {
     // Ensure r, g, b are within 0-255 range before converting to hex
@@ -339,22 +418,19 @@ function rgbToHex(r, g, b) {
 
 function updateColor(x, y) {
     const size = canvas.width;
+    const selectedSpace = colorSpaceSelect.value;
+    const currentSpace = matrices[selectedSpace];
     let outR, outG, outB, hue, saturation, value, sR, sG, sB;
 
+    // STEP 1: DETERMINE THE VISUAL COLOR (DISPLAY sRGB 0-255)
+    // This color is what the user *sees* and wants to pick.
+
     if (isImageLoaded) {
-        // Sample from offscreen canvas for a "clean" pixel pick (no indicators)
+        // Sample from offscreen canvas
         const pixelData = offscreenCtx.getImageData(x, y, 1, 1).data;
         sR = pixelData[0];
         sG = pixelData[1];
         sB = pixelData[2];
-
-        const linR = sRGBToLinear(sR / 255);
-        const linG = sRGBToLinear(sG / 255);
-        const linB = sRGBToLinear(sB / 255);
-
-        const selectedSpace = colorSpaceSelect.value;
-        const toTargetMatrix = matrices[selectedSpace].toTarget;
-        [outR, outG, outB] = applyMatrix([linR, linG, linB], toTargetMatrix);
 
         [hue, saturation, value] = rgbToHsvUnscaled(sR, sG, sB);
         currentX = x;
@@ -374,24 +450,65 @@ function updateColor(x, y) {
             saturation = distance / radius;
             value = parseFloat(valueSlider.value);
 
-            // Treat picked HSV as values in the TARGET color space
-            const [rTarget, gTarget, bTarget] = hsvToRgbLin(hue, saturation, value);
-            outR = rTarget;
-            outG = gTarget;
-            outB = bTarget;
-
-            // Convert TARGET space to linear sRGB for monitor display
-            const selectedSpace = colorSpaceSelect.value;
-            const toLinMatrix = matrices[selectedSpace].toLinearSRGB;
-            const [rLin, gLin, bLin] = applyMatrix([outR, outG, outB], toLinMatrix);
-
-            // Display color is always sRGB-mapped for the monitor
-            sR = Math.max(0, Math.min(255, Math.round(linearToSRGB(rLin) * 255)));
-            sG = Math.max(0, Math.min(255, Math.round(linearToSRGB(gLin) * 255)));
-            sB = Math.max(0, Math.min(255, Math.round(linearToSRGB(bLin) * 255)));
+            // VISUAL MODEL: STANDARD DISPLAY sRGB
+            // We calculate the 0-1 values and map to 0-255 for display
+            const [rLin, gLin, bLin] = hsvToRgbLin(hue, saturation, value);
+            sR = Math.min(255, Math.round(rLin * 255));
+            sG = Math.min(255, Math.round(gLin * 255));
+            sB = Math.min(255, Math.round(bLin * 255));
         } else {
             return;
         }
+    }
+
+    // STEP 2: CALCULATE THE NUKE / OUTPUT VALUES
+    // Normalized Display RGB (0-1)
+    const normR = sR / 255;
+    const normG = sG / 255;
+    const normB = sB / 255;
+
+    // A. Visual -> Linear sRGB (Monitor Space)
+    let linR = sRGBToLinear(normR);
+    let linG = sRGBToLinear(normG);
+    let linB = sRGBToLinear(normB);
+
+    // B. Linear sRGB -> Scene Linear (Reverse Tone Map)
+    // If ACES is selected, we undo the ACES sRGB ODT
+    // If ACES is selected, we undo the ACES sRGB ODT
+    if (currentSpace.type === 'aces') {
+        const invODT = nukeInverseODT;
+        linR = invODT(linR);
+        linG = invODT(linG);
+        linB = invODT(linB);
+    }
+
+    // C. Scene Linear sRGB -> Target Primary Space (e.g. AP1)
+    let [targetR, targetG, targetB] = applyMatrix([linR, linG, linB], currentSpace.toTarget);
+
+    // D. Apply Final Encoding
+    if (currentSpace.isLog) {
+        if (currentSpace.logMode === 'cct') {
+            outR = linToACEScct(targetR);
+            outG = linToACEScct(targetG);
+            outB = linToACEScct(targetB);
+        } else {
+            outR = linToACEScc(targetR);
+            outG = linToACEScc(targetG);
+            outB = linToACEScc(targetB);
+        }
+    } else if (currentSpace.isOETF) {
+        outR = linToRec709(targetR);
+        outG = linToRec709(targetG);
+        outB = linToRec709(targetB);
+    } else if (currentSpace.type === 'display') {
+        outR = normR;
+        outG = normG;
+        outB = normB;
+    } else {
+        // Scene Linear (ACEScg / Linear sRGB)
+        outR = targetR;
+        outG = targetG;
+        outB = targetB;
     }
 
     currentHue = hue;
@@ -399,8 +516,8 @@ function updateColor(x, y) {
 
     colorDisplay.style.backgroundColor = `rgb(${sR}, ${sG}, ${sB})`;
 
-    // Update labels with cleaned up values
-    rgbLabel.textContent = `${outR.toFixed(3)}, ${outG.toFixed(3)}, ${outB.toFixed(3)}`;
+    // Update labels
+    rgbLabel.textContent = `${outR.toFixed(4)}, ${outG.toFixed(4)}, ${outB.toFixed(4)}`;
     hexLabel.innerHTML = `<input type="text" id="hexInput" value="${rgbToHex(sR, sG, sB)}" />`;
     hsvLabel.textContent = `${Math.round(hue * 360)}°, ${Math.round(saturation * 100)}%, ${Math.round(value * 100)}%`;
 
@@ -424,18 +541,52 @@ function updateColor(x, y) {
         ];
 
         harmoniesContainer.innerHTML = '';
+        harmoniesContainer.innerHTML = '';
         harmonyHues.forEach(harmony => {
-            // Current saturation and value are used for harmony swatches
-            const [rTarget, gTarget, bTarget] = hsvToRgbLin(harmony.hue, saturation, value);
+            // VISUAL MODEL: STANDARD DISPLAY sRGB
+            const [rLin, gLin, bLin] = hsvToRgbLin(harmony.hue, saturation, value);
 
-            // Convert to linear sRGB then sRGB for display
-            const selectedSpace = colorSpaceSelect.value;
-            const toLinMatrix = matrices[selectedSpace].toLinearSRGB;
-            const [rLin, gLin, bLin] = applyMatrix([rTarget, gTarget, bTarget], toLinMatrix);
+            // Display Values (0-255)
+            // Since rLin is 0-1 in Display Space, we just scale
+            const hR = Math.min(255, Math.round(rLin * 255));
+            const hG = Math.min(255, Math.round(gLin * 255));
+            const hB = Math.min(255, Math.round(bLin * 255));
 
-            const hR = Math.max(0, Math.min(255, Math.round(linearToSRGB(rLin) * 255)));
-            const hG = Math.max(0, Math.min(255, Math.round(linearToSRGB(gLin) * 255)));
-            const hB = Math.max(0, Math.min(255, Math.round(linearToSRGB(bLin) * 255)));
+            // CALCULATE OUTPUT
+            let linH_R = sRGBToLinear(rLin);
+            let linH_G = sRGBToLinear(gLin);
+            let linH_B = sRGBToLinear(bLin);
+
+            if (currentSpace.type === 'aces') {
+                // Nuke's specific 'sRGB (ACES)' Inverse ODT calibration
+                const invODT = nukeInverseODT;
+                linH_R = invODT(linH_R);
+                linH_G = invODT(linH_G);
+                linH_B = invODT(linH_B);
+            }
+
+            let [hTargetR, hTargetG, hTargetB] = applyMatrix([linH_R, linH_G, linH_B], currentSpace.toTarget);
+
+            let hOutR, hOutG, hOutB;
+            if (currentSpace.isLog) {
+                if (currentSpace.logMode === 'cct') {
+                    hOutR = linToACEScct(hTargetR);
+                    hOutG = linToACEScct(hTargetG);
+                    hOutB = linToACEScct(hTargetB);
+                } else {
+                    hOutR = linToACEScc(hTargetR);
+                    hOutG = linToACEScc(hTargetG);
+                    hOutB = linToACEScc(hTargetB);
+                }
+            } else if (currentSpace.isOETF) {
+                hOutR = linToRec709(hTargetR);
+                hOutG = linToRec709(hTargetG);
+                hOutB = linToRec709(hTargetB);
+            } else if (currentSpace.type === 'display') {
+                hOutR = rLin; hOutG = gLin; hOutB = bLin;
+            } else {
+                hOutR = hTargetR; hOutG = hTargetG; hOutB = hTargetB;
+            }
 
             const item = document.createElement('div');
             item.className = 'harmony-item';
@@ -446,11 +597,13 @@ function updateColor(x, y) {
 
             // Drag and Drop for Harmony Swatch
             swatch.draggable = true;
+
+            // Raw values are already in target space (log or linear)
             const harmonyData = {
                 rgb: `rgb(${hR}, ${hG}, ${hB})`,
                 hex: rgbToHex(hR, hG, hB),
                 hsv: `${Math.round(harmony.hue * 360)}°, ${Math.round(saturation * 100)}%, ${Math.round(value * 100)}%`,
-                rgbOutput: `${rTarget.toFixed(3)}, ${gTarget.toFixed(3)}, ${bTarget.toFixed(3)}`,
+                rgbOutput: `${hOutR.toFixed(4)}, ${hOutG.toFixed(4)}, ${hOutB.toFixed(4)}`,
                 x: (canvas.width / 2) + Math.cos(harmony.hue * 2 * Math.PI - Math.PI) * saturation * (canvas.width / 2),
                 y: (canvas.height / 2) + Math.sin(harmony.hue * 2 * Math.PI - Math.PI) * saturation * (canvas.height / 2)
             };
@@ -894,21 +1047,33 @@ function revertToColor(color) {
         hexInput.addEventListener('blur', (e) => updateFromHex(e.target.value));
     }
 
-    // Extract Value from HSV string (e.g., "(120°, 50%, 80%)")
-    const hsvMatch = color.hsv.match(/(\d+)%\)/);
-    if (hsvMatch) {
-        valueSlider.value = parseInt(hsvMatch[1]) / 100;
+    // Extract Hue/Sat from the stored HSV string for accuracy
+    // Format: "120°, 50%, 80%"
+    const hsvClean = color.hsv.replace(/[^\d.,]/g, ''); // "120,50,80"
+    const [hVal, sVal, vVal] = hsvClean.split(',').map(Number);
+
+    if (!isNaN(hVal) && !isNaN(sVal)) {
+        currentHue = hVal / 360;
+        currentSaturation = sVal / 100;
+        // Recalculate X/Y based on current canvas size and stored H/S
+        // This fixes the "indicator drift" (Hex back-calculation mismatch)
+        // And fixes broken indicators on window resize
+        const radius = canvas.width / 2;
+        const centerX = canvas.width / 2;
+        const centerY = canvas.height / 2;
+        const angle = currentHue * 2 * Math.PI - Math.PI;
+
+        currentX = centerX + currentSaturation * radius * Math.cos(angle);
+        currentY = centerY + currentSaturation * radius * Math.sin(angle);
+    } else {
+        // Fallback to stored X/Y if parsing fails
+        currentX = color.x;
+        currentY = color.y;
     }
 
-    // Update color wheel position
-    currentX = color.x;
-    currentY = color.y;
-
-    const rgb = hexToRgb(color.hex);
-    if (rgb) {
-        const [h, s] = rgbToHsv(rgb.r, rgb.g, rgb.b);
-        currentHue = h;
-        currentSaturation = s;
+    // Update Slider
+    if (!isNaN(vVal)) {
+        valueSlider.value = vVal / 100;
     }
 
     // Redraw the color wheel with the updated position
@@ -960,19 +1125,54 @@ function updateFromHex(hex) {
         valueSlider.value = v;
 
         // Update labels
-        // HEX RGB is display sRGB. For output space, we need to convert sRGB -> Linear sRGB -> Target Space
-        const linR = sRGBToLinear(rgb.r / 255);
-        const linG = sRGBToLinear(rgb.g / 255);
-        const linB = sRGBToLinear(rgb.b / 255);
-        const linRgb = [linR, linG, linB];
+        // A. Visual -> Linear sRGB
+        let linR = sRGBToLinear(rgb.r / 255);
+        let linG = sRGBToLinear(rgb.g / 255);
+        let linB = sRGBToLinear(rgb.b / 255);
 
         const selectedSpace = colorSpaceSelect.value;
-        const toTargetMatrix = matrices[selectedSpace].toTarget;
-        const transformedRgb = applyMatrix(linRgb, toTargetMatrix);
-        const [outR, outG, outB] = transformedRgb;
+        const currentSpace = matrices[selectedSpace];
 
-        const spaceLabel = colorSpaceSelect.options[colorSpaceSelect.selectedIndex].text;
-        rgbLabel.textContent = `${outR.toFixed(3)}, ${outG.toFixed(3)}, ${outB.toFixed(3)}`;
+        // B. Linear sRGB -> Scene Linear (Reverse Tone Map if ACES)
+        if (currentSpace.type === 'aces') {
+            // Nuke's specific 'sRGB (ACES)' Inverse ODT calibration
+            const invODT = nukeInverseODT;
+            linR = invODT(linR);
+            linG = invODT(linG);
+            linB = invODT(linB);
+        }
+
+        // C. Scene Linear sRGB -> Target Primary Space (AP1)
+        let [targetR, targetG, targetB] = applyMatrix([linR, linG, linB], currentSpace.toTarget);
+
+        let outR, outG, outB;
+        if (currentSpace.isLog) {
+            if (currentSpace.logMode === 'cct') {
+                outR = linToACEScct(targetR);
+                outG = linToACEScct(targetG);
+                outB = linToACEScct(targetB);
+            } else {
+                outR = linToACEScc(targetR);
+                outG = linToACEScc(targetG);
+                outB = linToACEScc(targetB);
+            }
+        } else if (currentSpace.isOETF) {
+            // Rec.709 OETF
+            outR = linToRec709(targetR);
+            outG = linToRec709(targetG);
+            outB = linToRec709(targetB);
+        } else if (currentSpace.type === 'display') {
+            outR = rgb.r / 255;
+            outG = rgb.g / 255;
+            outB = rgb.b / 255;
+        } else {
+            // Linear
+            outR = targetR;
+            outG = targetG;
+            outB = targetB;
+        }
+
+        rgbLabel.textContent = `${outR.toFixed(4)}, ${outG.toFixed(4)}, ${outB.toFixed(4)}`;
         hexLabel.innerHTML = `<input type="text" id="hexInput" value="${hex}" />`;
         hsvLabel.textContent = `${Math.round(h * 360)}°, ${Math.round(s * 100)}%, ${Math.round(v * 100)}%`;
 
@@ -992,6 +1192,34 @@ function updateFromHex(hex) {
         // Redraw the color wheel with the updated position
         drawColorWheel();
     }
+}
+
+// ACES Tone Mapping Approximation (Narkowicz fit)
+function acesFit(x) {
+    const a = 2.51;
+    const b = 0.03;
+    const c = 2.43;
+    const d = 0.59;
+    const e = 0.14;
+    return (x * (a * x + b)) / (x * (c * x + d) + e);
+}
+
+// Inverse ACES Tone Mapping
+function invAcesFit(y) {
+    // Clamp y for safety (max output of curve is ~1.03)
+    if (y >= 1.0) y = 0.999;
+    if (y <= 0) return 0;
+    const a = 2.51;
+    const b = 0.03;
+    const c = 2.43;
+    const d = 0.59;
+    const e = 0.14;
+    const A = y * c - a;
+    const B = y * d - b;
+    const C = y * e;
+    const disc = B * B - 4 * A * C;
+    if (disc < 0) return 0;
+    return (-B - Math.sqrt(disc)) / (2 * A);
 }
 
 window.addEventListener('resize', resizeCanvas);

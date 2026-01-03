@@ -12,7 +12,7 @@
         rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
     <meta name="description" content="Professional VFX Color Wheel for Nuke workflows">
-    <link rel="icon" hr ef="favicon.ico" type="image/x-icon">
+    <link rel="icon" href="color_wheel.png" type="image/png">
     <meta name="author" content="George Antonopoulos">
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#121212">
@@ -32,8 +32,9 @@
             </button>
         </div>
         <header>
-            <h1>Colour Wheel for Nuke</h1>
-            <p class="subtitle" title="Press P for PiP, C for Copy, S for Save, E for EyeDropper">ACEScg / AP1 Workflow
+            <h1>Color Wheel <span class="title-suffix">for Nuke</span></h1>
+            <p class="subtitle" title="Press P for PiP, C for Copy, S for Save, E for EyeDropper">ACEScg / ACEScct
+                Workflow
                 Tool</p>
         </header>
 
@@ -61,7 +62,7 @@
                 <div class="select-wrapper">
                     <label for="colorSpace">Output Color Space</label>
                     <select id="colorSpace">
-                        <option value="aces_ap1">ACES AP1</option>
+                        <option value="aces_cct">ACEScct</option>
                         <option value="aces_cg">ACEScg</option>
                         <option value="linear_srgb">Linear sRGB</option>
                         <option value="rec_709">Rec.709</option>
