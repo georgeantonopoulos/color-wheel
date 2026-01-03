@@ -799,17 +799,38 @@ valueSlider.addEventListener('input', () => {
 });
 
 copyButton.textContent = 'Copy Nuke Node';
-copyButton.addEventListener('click', () => {
+copyButton.addEventListener('click', async () => {
     const rgbText = rgbLabel.textContent;
-    const rgbValues = rgbText.match(/\d+\.\d+/g);
+    // Robustly match numbers including potential integers or scientific notation
+    const rgbValues = rgbText.match(/-?\d*\.?\d+/g);
 
-    if (rgbValues && rgbValues.length === 3) {
+    if (rgbValues && rgbValues.length >= 3) {
         const [r, g, b] = rgbValues;
         const nukeNode = `set cut_paste_input [stack 0]; version 13.0; Constant { inputs 0 color {${r} ${g} ${b} 1} name ColorWheel_Pick selected true xpos 0 ypos 0 }`;
 
-        navigator.clipboard.writeText(nukeNode).then(() => {
-            alert('Nuke Constant node copied!');
-        });
+        try {
+            // Use the navigator of the window that holds the button to ensure permission
+            const nav = (pipWindow && !pipWindow.closed) ? pipWindow.navigator : navigator;
+            await nav.clipboard.writeText(nukeNode);
+
+            // Visual feedback instead of alert (which is blocked in PiP)
+            const originalText = copyButton.textContent;
+            copyButton.textContent = 'Copied!';
+            copyButton.classList.add('success');
+
+            setTimeout(() => {
+                copyButton.textContent = originalText;
+                copyButton.classList.remove('success');
+            }, 1500);
+        } catch (err) {
+            console.error('Failed to copy:', err);
+            // Fallback to main window navigator if PiP one failed
+            navigator.clipboard.writeText(nukeNode).then(() => {
+                const originalText = copyButton.textContent;
+                copyButton.textContent = 'Copied!';
+                setTimeout(() => copyButton.textContent = originalText, 1500);
+            }).catch(e => console.error('Final fallback failed:', e));
+        }
     }
 });
 
