@@ -1079,32 +1079,24 @@ function clearSavedColors() {
 }
 
 function revertToColor(color) {
-    // Update color display
-    colorDisplay.style.backgroundColor = color.rgb;
-
-    // Use stored labels if they exist, or reconstruct
-    rgbLabel.textContent = color.rgbOutput ? color.rgbOutput.split(': ')[1] : color.rgb.match(/\d+/g).map(v => (parseInt(v) / 255).toFixed(3)).join(', ');
-    hexLabel.innerHTML = `<input type="text" id="hexInput" value="${color.hex}" />`;
-    hsvLabel.textContent = color.hsv.replace(/[()]/g, '');
-
-    // Re-attach hex input listener
-    const hexInput = document.getElementById('hexInput');
-    if (hexInput) {
-        hexInput.addEventListener('change', (e) => updateFromHex(e.target.value));
-        hexInput.addEventListener('blur', (e) => updateFromHex(e.target.value));
-    }
-
-    // Extract Hue/Sat from the stored HSV string for accuracy
+    // Extract Hue/Sat/Val from the stored HSV string for accuracy
     // Format: "120°, 50%, 80%"
-    const hsvClean = color.hsv.replace(/[^\d.,]/g, ''); // "120,50,80"
-    const [hVal, sVal, vVal] = hsvClean.split(',').map(Number);
+    const hsvClean = (color.hsv || "").replace(/[^\d.,]/g, ''); // "120,50,80"
+    const hsvParts = hsvClean.split(',');
+    const hVal = parseFloat(hsvParts[0]);
+    const sVal = parseFloat(hsvParts[1]);
+    const vVal = parseFloat(hsvParts[2]);
+
+    // Update Slider first as updateColor will read from it
+    if (!isNaN(vVal)) {
+        valueSlider.value = vVal / 100;
+    }
 
     if (!isNaN(hVal) && !isNaN(sVal)) {
         currentHue = hVal / 360;
         currentSaturation = sVal / 100;
-        // Recalculate X/Y based on current canvas size and stored H/S
-        // This fixes the "indicator drift" (Hex back-calculation mismatch)
-        // And fixes broken indicators on window resize
+
+        // Recalculate X/Y based on current canvas size to avoid offset issues
         const radius = canvas.width / 2;
         const centerX = canvas.width / 2;
         const centerY = canvas.height / 2;
@@ -1118,13 +1110,9 @@ function revertToColor(color) {
         currentY = color.y;
     }
 
-    // Update Slider
-    if (!isNaN(vVal)) {
-        valueSlider.value = vVal / 100;
-    }
-
-    // Redraw the color wheel with the updated position
-    drawColorWheel();
+    // Use the central update function to sync labels, harmonies, and UI
+    // This ensures Copy Nuke Node works and harmonies are refreshed
+    updateColor(currentX, currentY);
 }
 
 function rgbToHsv(r, g, b) {
