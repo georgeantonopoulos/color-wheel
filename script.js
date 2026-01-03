@@ -28,6 +28,19 @@ if ('documentPictureInPicture' in window) {
     pipToggle.classList.add('supported');
 }
 
+// Initialize ACES LUT system (async, will use fallback until ready)
+if (window.LutUtils) {
+    window.LutUtils.initColorSystem().then(success => {
+        if (success) {
+            console.log('ACES LUT system ready - using official OCIO transforms');
+            // Refresh current color if one is selected
+            if (currentX !== undefined && currentY !== undefined) {
+                updateColor(currentX, currentY);
+            }
+        }
+    });
+}
+
 const matrices = {
     aces_cg: {
         // Linear sRGB (D65) to ACEScg (AP1, Adapted to D60)
@@ -472,18 +485,36 @@ function updateColor(x, y) {
     let linG = sRGBToLinear(normG);
     let linB = sRGBToLinear(normB);
 
-    // B. Linear sRGB -> Scene Linear (Reverse Tone Map)
-    // If ACES is selected, we undo the ACES sRGB ODT
-    // If ACES is selected, we undo the ACES sRGB ODT
-    if (currentSpace.type === 'aces') {
-        const invODT = nukeInverseODT;
-        linR = invODT(linR);
-        linG = invODT(linG);
-        linB = invODT(linB);
-    }
+    // B. Convert to target color space
+    let targetR, targetG, targetB;
 
-    // C. Scene Linear sRGB -> Target Primary Space (e.g. AP1)
-    let [targetR, targetG, targetB] = applyMatrix([linR, linG, linB], currentSpace.toTarget);
+    if (currentSpace.type === 'aces') {
+        // Try to use official ACES LUT transform
+        if (window.LutUtils && window.LutUtils.isLutReady()) {
+            // Official OCIO transform: sRGB -> 3D LUT -> 1D LUT -> Matrix -> ACEScg
+            const acescg = window.LutUtils.srgbToAcescg(normR, normG, normB);
+            if (acescg) {
+                [targetR, targetG, targetB] = acescg;
+            } else {
+                // Fallback to polynomial
+                const invODT = nukeInverseODT;
+                linR = invODT(linR);
+                linG = invODT(linG);
+                linB = invODT(linB);
+                [targetR, targetG, targetB] = applyMatrix([linR, linG, linB], currentSpace.toTarget);
+            }
+        } else {
+            // Fallback: Polynomial approximation (before LUT loads or if LUT fails)
+            const invODT = nukeInverseODT;
+            linR = invODT(linR);
+            linG = invODT(linG);
+            linB = invODT(linB);
+            [targetR, targetG, targetB] = applyMatrix([linR, linG, linB], currentSpace.toTarget);
+        }
+    } else {
+        // Non-ACES spaces: use matrix transform
+        [targetR, targetG, targetB] = applyMatrix([linR, linG, linB], currentSpace.toTarget);
+    }
 
     // D. Apply Final Encoding
     if (currentSpace.isLog) {
@@ -557,15 +588,31 @@ function updateColor(x, y) {
             let linH_G = sRGBToLinear(gLin);
             let linH_B = sRGBToLinear(bLin);
 
-            if (currentSpace.type === 'aces') {
-                // Nuke's specific 'sRGB (ACES)' Inverse ODT calibration
-                const invODT = nukeInverseODT;
-                linH_R = invODT(linH_R);
-                linH_G = invODT(linH_G);
-                linH_B = invODT(linH_B);
-            }
+            let hTargetR, hTargetG, hTargetB;
 
-            let [hTargetR, hTargetG, hTargetB] = applyMatrix([linH_R, linH_G, linH_B], currentSpace.toTarget);
+            if (currentSpace.type === 'aces') {
+                // Try to use official ACES LUT transform
+                if (window.LutUtils && window.LutUtils.isLutReady()) {
+                    const acescg = window.LutUtils.srgbToAcescg(rLin, gLin, bLin);
+                    if (acescg) {
+                        [hTargetR, hTargetG, hTargetB] = acescg;
+                    } else {
+                        const invODT = nukeInverseODT;
+                        linH_R = invODT(linH_R);
+                        linH_G = invODT(linH_G);
+                        linH_B = invODT(linH_B);
+                        [hTargetR, hTargetG, hTargetB] = applyMatrix([linH_R, linH_G, linH_B], currentSpace.toTarget);
+                    }
+                } else {
+                    const invODT = nukeInverseODT;
+                    linH_R = invODT(linH_R);
+                    linH_G = invODT(linH_G);
+                    linH_B = invODT(linH_B);
+                    [hTargetR, hTargetG, hTargetB] = applyMatrix([linH_R, linH_G, linH_B], currentSpace.toTarget);
+                }
+            } else {
+                [hTargetR, hTargetG, hTargetB] = applyMatrix([linH_R, linH_G, linH_B], currentSpace.toTarget);
+            }
 
             let hOutR, hOutG, hOutB;
             if (currentSpace.isLog) {
@@ -1126,24 +1173,42 @@ function updateFromHex(hex) {
 
         // Update labels
         // A. Visual -> Linear sRGB
-        let linR = sRGBToLinear(rgb.r / 255);
-        let linG = sRGBToLinear(rgb.g / 255);
-        let linB = sRGBToLinear(rgb.b / 255);
+        const normR = rgb.r / 255;
+        const normG = rgb.g / 255;
+        const normB = rgb.b / 255;
+        let linR = sRGBToLinear(normR);
+        let linG = sRGBToLinear(normG);
+        let linB = sRGBToLinear(normB);
 
         const selectedSpace = colorSpaceSelect.value;
         const currentSpace = matrices[selectedSpace];
 
-        // B. Linear sRGB -> Scene Linear (Reverse Tone Map if ACES)
-        if (currentSpace.type === 'aces') {
-            // Nuke's specific 'sRGB (ACES)' Inverse ODT calibration
-            const invODT = nukeInverseODT;
-            linR = invODT(linR);
-            linG = invODT(linG);
-            linB = invODT(linB);
-        }
+        // B. Convert to target color space
+        let targetR, targetG, targetB;
 
-        // C. Scene Linear sRGB -> Target Primary Space (AP1)
-        let [targetR, targetG, targetB] = applyMatrix([linR, linG, linB], currentSpace.toTarget);
+        if (currentSpace.type === 'aces') {
+            // Try to use official ACES LUT transform
+            if (window.LutUtils && window.LutUtils.isLutReady()) {
+                const acescg = window.LutUtils.srgbToAcescg(normR, normG, normB);
+                if (acescg) {
+                    [targetR, targetG, targetB] = acescg;
+                } else {
+                    const invODT = nukeInverseODT;
+                    linR = invODT(linR);
+                    linG = invODT(linG);
+                    linB = invODT(linB);
+                    [targetR, targetG, targetB] = applyMatrix([linR, linG, linB], currentSpace.toTarget);
+                }
+            } else {
+                const invODT = nukeInverseODT;
+                linR = invODT(linR);
+                linG = invODT(linG);
+                linB = invODT(linB);
+                [targetR, targetG, targetB] = applyMatrix([linR, linG, linB], currentSpace.toTarget);
+            }
+        } else {
+            [targetR, targetG, targetB] = applyMatrix([linR, linG, linB], currentSpace.toTarget);
+        }
 
         let outR, outG, outB;
         if (currentSpace.isLog) {
